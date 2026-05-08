@@ -4,21 +4,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
-
-type LeaveStatus = 'Approved' | 'Pending' | 'Rejected'
-type LeaveType = 'Annual Leave' | 'Sick Leave' | 'Maternity Leave' | 'Emergency Leave' | 'Unpaid Leave'
-
-interface LeaveRequest {
-  id: number
-  employee: string
-  department: string
-  type: LeaveType
-  from: string
-  to: string
-  days: number
-  status: LeaveStatus
-  reason: string
-}
+import type { LeaveStatus, LeaveType, LeaveRequest } from '../../types/hrm'
 
 const leaveRequests: LeaveRequest[] = [
   { id: 1, employee: 'Sarah Johnson', department: 'HR', type: 'Annual Leave', from: '2026-05-12', to: '2026-05-14', days: 3, status: 'Approved', reason: 'Family vacation' },

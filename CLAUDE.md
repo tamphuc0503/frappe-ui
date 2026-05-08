@@ -57,14 +57,23 @@ src/
   App.tsx                      # Router only — no UI logic here
   main.tsx                     # Entry point, StrictMode wrapper
   index.css                    # Tailwind import + global resets + keyframes + @layer components
+  types/
+    auth.ts                    # User, AuthContextType
+    hrm.ts                     # Employee, LeaveRequest, PayrollRecord, AttendanceRecord, Candidate, KanbanColumn, ClockRecord
+    fleet.ts                   # Vehicle, Driver, Trip (+ status union types)
+    crm.ts                     # Contact, Deal (+ union types)
+  services/
+    auth.ts                    # frappeLogin() — Frappe REST API call
+  hooks/
+    usePageLoad.ts             # Loading delay hook (900ms default)
+    useAuth.ts                 # Auth state hook — import from here, NOT from context/
+  context/
+    AuthContext.tsx            # AuthProvider + AuthContext export (do not import useAuth from here)
   components/
     layout/                    # AppShell, Sidebar, Header (structural, rendered once)
     ui/                        # Reusable primitives: Badge, StatCard, PageHeader, Skeleton
-  context/                     # React contexts (AuthContext)
-  hooks/                       # Custom hooks (usePageLoad)
   pages/
     auth/                      # Login, ForgotPassword
-    dashboard/                 # (flat — Dashboard.tsx lives at pages/)
     hrm/                       # Employee, Leave, Payrolls, Recruitment, ShiftAttendance, ClockInOut
     fleet/                     # Vehicles, Drivers, Trips
     crm/                       # Contacts, Deals, Reports
@@ -73,6 +82,8 @@ src/
 - **Page files live in the domain folder** that matches their route segment (`/hrm/employees` → `src/pages/hrm/Employee.tsx`).
 - **New reusable UI goes in `components/ui/`**, not inline in a page.
 - **New hooks go in `src/hooks/`** as `use<Name>.ts` (`.ts`, not `.tsx` unless they return JSX).
+- **New API functions go in `src/services/`** — one file per backend domain (e.g. `services/hrm.ts`, `services/fleet.ts`).
+- **Domain types go in `src/types/<domain>.ts`** — use `import type` when importing them. Form-local or dialog-private types stay in the component file.
 
 ---
 

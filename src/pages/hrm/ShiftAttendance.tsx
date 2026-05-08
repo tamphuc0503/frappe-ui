@@ -4,19 +4,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { Sk, SkPageHeader, SkStatCards, SkTable, SkWeekBar } from '../../components/ui/Skeleton'
-
-type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Half Day'
-
-interface AttendanceRecord {
-  id: number
-  employee: string
-  department: string
-  date: string
-  checkIn: string
-  checkOut: string
-  hours: number
-  status: AttendanceStatus
-}
+import type { AttendanceStatus, AttendanceRecord } from '../../types/hrm'
 
 const attendanceData: AttendanceRecord[] = [
   { id: 1, employee: 'Sarah Johnson', department: 'HR', date: '2026-05-08', checkIn: '08:02', checkOut: '17:05', hours: 9.05, status: 'Present' },

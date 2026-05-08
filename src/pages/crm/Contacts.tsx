@@ -4,22 +4,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
-
-type ContactType = 'Client' | 'Prospect' | 'Partner' | 'Vendor'
-
-interface Contact {
-  id: number
-  name: string
-  company: string
-  title: string
-  email: string
-  phone: string
-  type: ContactType
-  lastContact: string
-  deals: number
-  avatarInitials: string
-  avatarBg: string
-}
+import type { ContactType, Contact } from '../../types/crm'
 
 const contacts: Contact[] = [
   { id: 1, name: 'Angela Brooks', company: 'Horizon Shipping Co.', title: 'VP Logistics', email: 'a.brooks@horizonship.com', phone: '+1 (555) 111-2222', type: 'Client', lastContact: '2026-05-06', deals: 3, avatarInitials: 'AB', avatarBg: 'bg-blue-600' },

@@ -4,22 +4,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
-
-type TripStatus = 'Completed' | 'In Progress' | 'Scheduled' | 'Cancelled'
-
-interface Trip {
-  id: number
-  tripNo: string
-  vehicle: string
-  driver: string
-  origin: string
-  destination: string
-  distance: string
-  startDate: string
-  endDate: string
-  cargo: string
-  status: TripStatus
-}
+import type { TripStatus, Trip } from '../../types/fleet'
 
 const trips: Trip[] = [
   { id: 1, tripNo: 'T-2048', vehicle: 'FL-031', driver: 'Ahmed Hassan', origin: 'Los Angeles, CA', destination: 'Seattle, WA', distance: '1,135 km', startDate: '2026-05-08', endDate: '2026-05-09', cargo: 'Electronics', status: 'In Progress' },

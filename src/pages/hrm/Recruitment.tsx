@@ -1,9 +1,10 @@
-import React from 'react'
+import { Fragment } from 'react'
 import { Plus, Mail, Phone, MoreHorizontal } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { Sk, SkPageHeader, SkKanbanColumn } from '../../components/ui/Skeleton'
+import type { Candidate, KanbanColumn } from '../../types/hrm'
 
 function RecruitmentSkeleton() {
   return (
@@ -28,25 +29,6 @@ function RecruitmentSkeleton() {
   )
 }
 
-interface Candidate {
-  id: number
-  name: string
-  role: string
-  email: string
-  experience: string
-  appliedDate: string
-  avatarInitials: string
-  avatarBg: string
-  score?: number
-}
-
-type KanbanColumn = {
-  key: string
-  label: string
-  color: string
-  headerColor: string
-  candidates: Candidate[]
-}
 
 const columns: KanbanColumn[] = [
   {
@@ -111,7 +93,7 @@ export function Recruitment() {
       {/* Pipeline summary */}
       <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1">
         {columns.map((col, i) => (
-          <React.Fragment key={col.key}>
+          <Fragment key={col.key}>
             <div className="flex items-center gap-2 text-sm flex-shrink-0">
               <span className="font-medium text-gray-700">{col.label}</span>
               <span className="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full font-semibold">
@@ -121,7 +103,7 @@ export function Recruitment() {
             {i < columns.length - 1 && (
               <div className="w-12 h-0.5 bg-gray-200 flex-shrink-0" />
             )}
-          </React.Fragment>
+          </Fragment>
         ))}
       </div>
 

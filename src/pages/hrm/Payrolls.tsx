@@ -4,20 +4,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { Sk, SkPageHeader, SkTable } from '../../components/ui/Skeleton'
-
-type PayStatus = 'Paid' | 'Processing' | 'Pending'
-
-interface PayrollRecord {
-  id: number
-  employee: string
-  department: string
-  month: string
-  basicSalary: number
-  allowances: number
-  deductions: number
-  netPay: number
-  status: PayStatus
-}
+import type { PayStatus, PayrollRecord } from '../../types/hrm'
 
 const payrollData: PayrollRecord[] = [
   { id: 1, employee: 'Sarah Johnson', department: 'HR', month: 'April 2026', basicSalary: 7200, allowances: 800, deductions: 540, netPay: 7460, status: 'Paid' },

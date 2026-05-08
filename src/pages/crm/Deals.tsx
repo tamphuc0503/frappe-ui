@@ -4,20 +4,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
-
-type DealStage = 'Lead' | 'Qualified' | 'Proposal' | 'Negotiation' | 'Closed Won' | 'Closed Lost'
-
-interface Deal {
-  id: number
-  name: string
-  contact: string
-  company: string
-  value: number
-  stage: DealStage
-  probability: number
-  closeDate: string
-  owner: string
-}
+import type { DealStage, Deal } from '../../types/crm'
 
 const deals: Deal[] = [
   { id: 1, name: 'Horizon Shipping Annual Contract', contact: 'Angela Brooks', company: 'Horizon Shipping Co.', value: 480000, stage: 'Negotiation', probability: 75, closeDate: '2026-06-15', owner: 'Rachel Wong' },

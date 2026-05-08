@@ -4,19 +4,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
-
-interface Employee {
-  id: number
-  name: string
-  email: string
-  phone: string
-  department: string
-  position: string
-  status: 'Active' | 'Inactive' | 'On Leave' | 'Onboarding'
-  joinDate: string
-  avatarInitials: string
-  avatarBg: string
-}
+import type { Employee, EmployeeStatus } from '../../types/hrm'
 
 const AVATAR_COLORS = [
   'bg-pink-500', 'bg-blue-500', 'bg-purple-500', 'bg-emerald-500',
@@ -59,7 +47,7 @@ interface FormData {
   phone: string
   department: string
   position: string
-  status: 'Active' | 'Inactive' | 'On Leave' | 'Onboarding'
+  status: EmployeeStatus
   joinDate: string
 }
 
@@ -267,7 +255,7 @@ function AddEmployeeDialog({ onClose, onSave, nextColor }: AddEmployeeDialogProp
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
                   <select
                     value={form.status}
-                    onChange={(e) => set('status', e.target.value as Employee['status'])}
+                    onChange={(e) => set('status', e.target.value as EmployeeStatus)}
                     className="form-input bg-white"
                   >
                     <option value="Onboarding">Onboarding</option>

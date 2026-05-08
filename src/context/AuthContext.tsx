@@ -1,20 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import React, { createContext, useState, useEffect, useCallback } from 'react'
+import type { User, AuthContextType } from '../types/auth'
+import { frappeLogin } from '../services/auth'
 
-interface User {
-  email: string
-  name: string
-  role: string
-  avatarInitials: string
-}
-
-interface AuthContextType {
-  user: User | null
-  isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
-  logout: () => void
-}
-
-const AuthContext = createContext<AuthContextType | null>(null)
+export const AuthContext = createContext<AuthContextType | null>(null)
 
 const AUTH_STORAGE_KEY = 'oceanfleet_auth'
 
@@ -38,9 +26,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY)
-      if (stored) {
-        return JSON.parse(stored) as User
-      }
+      if (stored) return JSON.parse(stored) as User
     } catch {
       // ignore parse errors
     }
@@ -57,26 +43,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-      // Simulate network delay
-      await new Promise((r) => setTimeout(r, 600))
-
-      if (password !== 'password123') {
-        return { success: false, error: 'Invalid email or password.' }
+      try {
+        const { fullName } = await frappeLogin(email, password)
+        const name = fullName || deriveNameFromEmail(email)
+        const newUser: User = {
+          email,
+          name,
+          role: 'Administrator',
+          avatarInitials: getInitials(name),
+        }
+        setUser(newUser)
+        return { success: true }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unable to connect. Please check your connection and try again.'
+        return { success: false, error: message }
       }
-
-      if (!email.includes('@')) {
-        return { success: false, error: 'Please enter a valid email address.' }
-      }
-
-      const name = deriveNameFromEmail(email)
-      const newUser: User = {
-        email,
-        name,
-        role: 'Administrator',
-        avatarInitials: getInitials(name),
-      }
-      setUser(newUser)
-      return { success: true }
     },
     []
   )
@@ -90,12 +71,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       {children}
     </AuthContext.Provider>
   )
-}
-
-export function useAuth(): AuthContextType {
-  const ctx = useContext(AuthContext)
-  if (!ctx) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return ctx
 }

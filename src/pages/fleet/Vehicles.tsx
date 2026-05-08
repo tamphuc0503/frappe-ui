@@ -4,21 +4,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
-
-type VehicleStatus = 'Active' | 'Maintenance' | 'Idle' | 'Retired'
-
-interface Vehicle {
-  id: number
-  plateNo: string
-  make: string
-  model: string
-  year: number
-  type: string
-  driver: string
-  status: VehicleStatus
-  lastService: string
-  mileage: string
-}
+import type { VehicleStatus, Vehicle } from '../../types/fleet'
 
 const vehicles: Vehicle[] = [
   { id: 1, plateNo: 'FL-031', make: 'Volvo', model: 'FH16', year: 2022, type: 'Heavy Truck', driver: 'Ahmed Hassan', status: 'Active', lastService: '2026-04-01', mileage: '142,500 km' },

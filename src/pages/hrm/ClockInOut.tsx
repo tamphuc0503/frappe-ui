@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { usePageLoad } from '../../hooks/usePageLoad'
+import { useAuth } from '../../hooks/useAuth'
 import { Sk, SkPageHeader, SkStatCards, SkCalendarGrid, SkClockPanel } from '../../components/ui/Skeleton'
 import {
   Clock,
@@ -14,13 +15,7 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
-import { useAuth } from '../../context/AuthContext'
-
-interface ClockRecord {
-  date: string   // YYYY-MM-DD
-  clockIn: string | null   // HH:MM
-  clockOut: string | null  // HH:MM
-}
+import type { ClockRecord } from '../../types/hrm'
 
 const STORAGE_KEY = 'oceanfleet_clock_records'
 

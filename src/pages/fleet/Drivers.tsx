@@ -4,23 +4,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
-
-type DriverStatus = 'Available' | 'On Trip' | 'Off Duty' | 'Suspended'
-
-interface Driver {
-  id: number
-  name: string
-  license: string
-  licenseExpiry: string
-  phone: string
-  email: string
-  assignedVehicle: string
-  status: DriverStatus
-  totalTrips: number
-  rating: number
-  avatarInitials: string
-  avatarBg: string
-}
+import type { DriverStatus, Driver } from '../../types/fleet'
 
 const drivers: Driver[] = [
   { id: 1, name: 'Ahmed Hassan', license: 'DL-2019-48231', licenseExpiry: '2027-08-15', phone: '+1 (555) 102-3344', email: 'a.hassan@oceanfleet.com', assignedVehicle: 'FL-031', status: 'On Trip', totalTrips: 312, rating: 4.9, avatarInitials: 'AH', avatarBg: 'bg-blue-600' },
