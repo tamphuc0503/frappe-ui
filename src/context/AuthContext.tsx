@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react'
 import type { User, AuthContextType } from '../types/auth'
-import { frappeLogin } from '../services/auth'
+import { frappeLogin, clearSid } from '../services/auth'
+import { getCompany, setCompanyCache, clearCompanyCache } from '../services/company'
 
 export const AuthContext = createContext<AuthContextType | null>(null)
 
@@ -44,15 +45,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(
     async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
       try {
-        const { fullName } = await frappeLogin(email, password)
+        const { fullName, roles } = await frappeLogin(email, password)
         const name = fullName || deriveNameFromEmail(email)
         const newUser: User = {
           email,
           name,
           role: 'Administrator',
+          roles,
           avatarInitials: getInitials(name),
         }
         setUser(newUser)
+        const company = await getCompany().catch(() => null)
+        setCompanyCache(company)
         return { success: true }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unable to connect. Please check your connection and try again.'
@@ -63,6 +67,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const logout = useCallback(() => {
+    clearSid()
+    clearCompanyCache()
     setUser(null)
   }, [])
 

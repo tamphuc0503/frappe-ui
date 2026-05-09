@@ -4,34 +4,8 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
+import { getEmployees, createEmployee, getDepartments } from '../../services/hrm'
 import type { Employee, EmployeeStatus } from '../../types/hrm'
-
-const AVATAR_COLORS = [
-  'bg-pink-500', 'bg-blue-500', 'bg-purple-500', 'bg-emerald-500',
-  'bg-amber-500', 'bg-red-500', 'bg-indigo-500', 'bg-teal-500',
-  'bg-cyan-500', 'bg-orange-500', 'bg-rose-500', 'bg-violet-500',
-]
-
-const DEPARTMENTS = [
-  'Human Resources', 'Technology', 'Operations', 'Finance', 'Sales', 'Legal', 'Marketing',
-]
-
-const INITIAL_EMPLOYEES: Employee[] = [
-  { id: 1, name: 'Sarah Johnson', email: 'sarah.j@oceanfleet.com', phone: '+1 555 010 1001', department: 'Human Resources', position: 'HR Manager', status: 'Active', joinDate: '2019-03-15', avatarInitials: 'SJ', avatarBg: 'bg-pink-500' },
-  { id: 2, name: 'Marcus Chen', email: 'm.chen@oceanfleet.com', phone: '+1 555 010 1002', department: 'Technology', position: 'Senior Engineer', status: 'Active', joinDate: '2021-07-01', avatarInitials: 'MC', avatarBg: 'bg-blue-500' },
-  { id: 3, name: 'Linda Park', email: 'l.park@oceanfleet.com', phone: '+1 555 010 1003', department: 'Operations', position: 'Fleet Coordinator', status: 'Active', joinDate: '2020-01-20', avatarInitials: 'LP', avatarBg: 'bg-purple-500' },
-  { id: 4, name: 'Tom Rivera', email: 't.rivera@oceanfleet.com', phone: '+1 555 010 1004', department: 'Finance', position: 'Financial Analyst', status: 'Active', joinDate: '2022-04-11', avatarInitials: 'TR', avatarBg: 'bg-emerald-500' },
-  { id: 5, name: 'Grace Nwosu', email: 'g.nwosu@oceanfleet.com', phone: '+1 555 010 1005', department: 'Sales', position: 'Account Executive', status: 'On Leave', joinDate: '2018-09-03', avatarInitials: 'GN', avatarBg: 'bg-amber-500' },
-  { id: 6, name: 'Carlos Mendez', email: 'c.mendez@oceanfleet.com', phone: '+1 555 010 1006', department: 'Operations', position: 'Safety Officer', status: 'Active', joinDate: '2017-06-22', avatarInitials: 'CM', avatarBg: 'bg-red-500' },
-  { id: 7, name: 'Rachel Wong', email: 'r.wong@oceanfleet.com', phone: '+1 555 010 1007', department: 'Sales', position: 'Sales Director', status: 'Active', joinDate: '2016-11-30', avatarInitials: 'RW', avatarBg: 'bg-indigo-500' },
-  { id: 8, name: 'David Kim', email: 'd.kim@oceanfleet.com', phone: '+1 555 010 1008', department: 'Technology', position: 'IT Administrator', status: 'Inactive', joinDate: '2023-02-14', avatarInitials: 'DK', avatarBg: 'bg-teal-500' },
-]
-
-function deriveInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-  return name.slice(0, 2).toUpperCase()
-}
 
 function statusBadge(status: Employee['status']) {
   if (status === 'Active') return <Badge variant="green">Active</Badge>
@@ -64,20 +38,33 @@ const EMPTY_FORM: FormData = {
 // ─── Add Employee Dialog ───────────────────────────────────────────────────────
 interface AddEmployeeDialogProps {
   onClose: () => void
-  onSave: (emp: Omit<Employee, 'id'>) => void
-  nextColor: string
+  onSave: (emp: Employee) => void
 }
 
-function AddEmployeeDialog({ onClose, onSave, nextColor }: AddEmployeeDialogProps) {
+function AddEmployeeDialog({ onClose, onSave }: AddEmployeeDialogProps) {
   const [form, setForm] = useState<FormData>(EMPTY_FORM)
   const [errors, setErrors] = useState<Partial<FormData>>({})
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [errorShaking, setErrorShaking] = useState(false)
   const [shakingFields, setShakingFields] = useState<Set<keyof FormData>>(new Set())
+  const [departments, setDepartments] = useState<string[]>([])
+  const [loadingDepartments, setLoadingDepartments] = useState(true)
   const firstInputRef = useRef<HTMLInputElement>(null)
 
   // Focus first field on open
   useEffect(() => {
     firstInputRef.current?.focus()
+  }, [])
+
+  // Load departments from Frappe
+  useEffect(() => {
+    let alive = true
+    getDepartments()
+      .then((data) => { if (alive) setDepartments(data) })
+      .catch(() => { /* dropdown stays empty; submit will fail with a clear error */ })
+      .finally(() => { if (alive) setLoadingDepartments(false) })
+    return () => { alive = false }
   }, [])
 
   // Close on Escape (but not while submitting)
@@ -121,22 +108,25 @@ function AddEmployeeDialog({ onClose, onSave, nextColor }: AddEmployeeDialogProp
     e.preventDefault()
     if (!validate()) return
     setSubmitting(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1400))
-    const initials = deriveInitials(form.name)
-    onSave({
-      name: form.name.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim(),
-      department: form.department,
-      position: form.position.trim(),
-      status: form.status,
-      joinDate: form.joinDate,
-      avatarInitials: initials,
-      avatarBg: nextColor,
-    })
-    setSubmitting(false)
-    onClose()
+    setSubmitError(null)
+    try {
+      const newEmployee = await createEmployee({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        department: form.department,
+        position: form.position.trim(),
+        status: form.status,
+        joinDate: form.joinDate,
+      })
+      onSave(newEmployee)
+      onClose()
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to add employee.')
+      setErrorShaking(true)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -169,7 +159,14 @@ function AddEmployeeDialog({ onClose, onSave, nextColor }: AddEmployeeDialogProp
 
           <form onSubmit={handleSubmit} noValidate>
             <div className="px-6 py-5 space-y-5">
-
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${submitError ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>
+                <div
+                  className={`p-3 bg-red-50 border border-red-200 rounded-lg ${errorShaking ? 'field-shake' : ''}`}
+                  onAnimationEnd={() => setErrorShaking(false)}
+                >
+                  <span className="text-red-600 text-sm">{submitError}</span>
+                </div>
+              </div>
 
               {/* Name + Email */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -225,10 +222,11 @@ function AddEmployeeDialog({ onClose, onSave, nextColor }: AddEmployeeDialogProp
                   <select
                     value={form.department}
                     onChange={(e) => set('department', e.target.value)}
+                    disabled={loadingDepartments}
                     className={`form-input bg-white ${errors.department ? 'border-red-400 focus:ring-red-400' : ''}`}
                   >
-                    <option value="">Select department</option>
-                    {DEPARTMENTS.map((d) => (
+                    <option value="">{loadingDepartments ? 'Loading…' : 'Select department'}</option>
+                    {departments.map((d) => (
                       <option key={d} value={d}>{d}</option>
                     ))}
                   </select>
@@ -313,11 +311,23 @@ function AddEmployeeDialog({ onClose, onSave, nextColor }: AddEmployeeDialogProp
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export function Employee() {
-  const loading = usePageLoad()
-  const [employeeList, setEmployeeList] = useState<Employee[]>(INITIAL_EMPLOYEES)
+  const pageLoading = usePageLoad()
+  const [employeeList, setEmployeeList] = useState<Employee[]>([])
+  const [fetchLoading, setFetchLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [showDialog, setShowDialog] = useState(false)
 
+  useEffect(() => {
+    let alive = true
+    getEmployees()
+      .then((data) => { if (alive) { setEmployeeList(data); setError(null) } })
+      .catch((err) => { if (alive) setError(err instanceof Error ? err.message : 'Failed to load employees.') })
+      .finally(() => { if (alive) setFetchLoading(false) })
+    return () => { alive = false }
+  }, [])
+
+  const loading = pageLoading || fetchLoading
   if (loading) return <><SkPageHeader /><SkTable rows={8} cols={6} hasToolbar hasAvatar /></>
 
   const filtered = employeeList.filter(
@@ -327,14 +337,9 @@ export function Employee() {
       e.position.toLowerCase().includes(search.toLowerCase())
   )
 
-  function handleSave(emp: Omit<Employee, 'id'>) {
-    setEmployeeList((prev) => [
-      ...prev,
-      { ...emp, id: prev.length ? Math.max(...prev.map((e) => e.id)) + 1 : 1 },
-    ])
+  function handleSave(emp: Employee) {
+    setEmployeeList((prev) => [...prev, emp])
   }
-
-  const nextColor = AVATAR_COLORS[employeeList.length % AVATAR_COLORS.length]
 
   return (
     <div>
@@ -418,11 +423,15 @@ export function Employee() {
           </table>
         </div>
 
-        {filtered.length === 0 && (
+        {error ? (
+          <div className="text-center py-12 text-red-500">
+            <p>{error}</p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
             <p>No employees match your search.</p>
           </div>
-        )}
+        ) : null}
 
         <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
           <span>Showing {filtered.length} of {employeeList.length} employees</span>
@@ -437,7 +446,6 @@ export function Employee() {
         <AddEmployeeDialog
           onClose={() => setShowDialog(false)}
           onSave={handleSave}
-          nextColor={nextColor}
         />
       )}
     </div>

@@ -23,6 +23,9 @@ import { Contacts } from './pages/crm/Contacts'
 import { Deals } from './pages/crm/Deals'
 import { Reports } from './pages/crm/Reports'
 
+import { Company } from './pages/settings/Company'
+import { Departments } from './pages/settings/Departments'
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
   if (!isAuthenticated) return <Navigate to="/login" replace />
@@ -69,6 +72,9 @@ function AppRoutes() {
         <Route path="/crm/contacts" element={<Contacts />} />
         <Route path="/crm/deals" element={<Deals />} />
         <Route path="/crm/reports" element={<Reports />} />
+
+        <Route path="/settings/company" element={<Company />} />
+        <Route path="/settings/departments" element={<Departments />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />

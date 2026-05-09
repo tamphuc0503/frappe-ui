@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { CompanyInfoDialog } from '../ui/CompanyInfoDialog'
 import {
   LayoutDashboard,
   Newspaper,
@@ -22,6 +23,9 @@ import {
   ChevronRight,
   ChevronDown,
   Anchor,
+  Settings,
+  Building,
+  Building2,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -77,6 +81,14 @@ const navItems: NavItem[] = [
       { label: 'Reports', icon: <BarChart3 className="w-4 h-4" />, path: '/crm/reports' },
     ],
   },
+  {
+    label: 'Settings',
+    icon: <Settings className="w-5 h-5" />,
+    children: [
+      { label: 'Company', icon: <Building className="w-4 h-4" />, path: '/settings/company' },
+      { label: 'Departments', icon: <Building2 className="w-4 h-4" />, path: '/settings/departments' },
+    ],
+  },
 ]
 
 function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
@@ -107,6 +119,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   }
 
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(getDefaultOpen)
+  const [showCompanyDialog, setShowCompanyDialog] = useState(false)
 
   // Auto-open submenu when navigating to a child route
   useEffect(() => {
@@ -130,8 +143,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         collapsed ? 'w-16' : 'w-64'
       }`}
     >
-      {/* Logo area */}
-      <div className={`h-16 flex items-center border-b border-slate-700/50 flex-shrink-0 ${collapsed ? 'justify-center px-0' : 'px-5 gap-3'}`}>
+      {/* Logo area — opens company info dialog on click */}
+      <button
+        onClick={() => setShowCompanyDialog(true)}
+        title={collapsed ? 'Company info' : undefined}
+        className={`h-16 flex items-center border-b border-slate-700/50 flex-shrink-0 hover:bg-slate-800/50 transition-colors w-full text-left ${collapsed ? 'justify-center px-0' : 'px-5 gap-3'}`}
+      >
         <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
           <Anchor className="w-4 h-4 text-white" />
         </div>
@@ -141,7 +158,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <p className="text-blue-400 text-xs font-medium leading-tight">ERP Platform</p>
           </div>
         )}
-      </div>
+      </button>
 
       {/* Nav items */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-0.5">
@@ -254,6 +271,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           )}
         </button>
       </div>
+
+      {showCompanyDialog && (
+        <CompanyInfoDialog onClose={() => setShowCompanyDialog(false)} />
+      )}
     </aside>
   )
 }

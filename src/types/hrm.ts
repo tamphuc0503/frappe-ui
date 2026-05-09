@@ -2,7 +2,7 @@
 export type EmployeeStatus = 'Active' | 'Inactive' | 'On Leave' | 'Onboarding'
 
 export interface Employee {
-  id: number
+  id: string
   name: string
   email: string
   phone: string

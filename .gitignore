@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Local REST-client scratch files (often contain credentials)
+.http/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

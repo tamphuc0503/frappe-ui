@@ -2,6 +2,7 @@ export interface User {
   email: string
   name: string
   role: string
+  roles: string[]
   avatarInitials: string
 }
 

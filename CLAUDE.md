@@ -87,6 +87,14 @@ src/
 
 ---
 
+## Services & Transformers
+
+- **All API responses representing domain objects must be transformed via a codec.** Services that fetch Frappe doctypes (Employee, Company, etc.) must run the response through the corresponding `Codec.decode()` from `src/transformers/`. Pages and components consume only the UI domain types in `src/types/`, never raw Frappe shapes.
+- Each transformer file exports a `Codec<Domain, External>` (see `transformers/codec.ts`) implementing `decode(external) → domain` and `encode(domain) → external`. Even if `encode` isn't used today, write it — it forces both directions to stay in sync as Frappe fields change.
+- One transformer file per Frappe doctype (`transformers/employee.ts`, `transformers/company.ts`, etc.). The Frappe-shape interface (`FrappeEmployee`, `FrappeCompany`) lives next to its codec — services import the type from there, not from `types/`.
+- Asymmetric one-way transformations (e.g., a UI form input → a `frappe.client.insert` payload that needs `doctype`/`first_name`/etc.) live as plain functions next to the codec, not as another codec instance — codecs are reserved for symmetric domain↔external mapping.
+- Primitive responses (e.g., a `string[]` from `frappe.client.get_list` with one field) can stay inline; codecs are for object-shaped domains.
+
 ## Routing
 
 - Routes are declared in `App.tsx` only — no `useNavigate` for structural navigation between app sections.
@@ -159,6 +167,7 @@ export function MyPage() {
 - **Required field errors trigger the `.field-shake` animation** — apply via `shakingFields: Set<keyof FormData>` state + `onAnimationEnd` cleanup (pattern established in `Employee.tsx`).
 - **Fake API calls use `setTimeout` wrapped in a `Promise`** until real endpoints exist. Show a `Loader2` spinner in the submit button; block Cancel, backdrop click, and Escape during submission.
 - **Sheet-from-top dialogs** use `fixed inset-x-0 top-0` container + `rounded-b-2xl` panel + `.dialog-enter` class. The backdrop uses `.backdrop-enter`.
+- **Submit error banners animate height** — every dialog/modal that surfaces a submit error must wrap the banner in `<div className={`overflow-hidden transition-all duration-300 ease-in-out ${error ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>` so the dialog grows/shrinks smoothly when the error appears or clears, matching `Login.tsx` / `ForgotPassword.tsx`. Pair with a separate `errorShaking` state and `.field-shake` on the inner banner; reset via `onAnimationEnd`.
 - Close on Escape via `window.addEventListener('keydown', ...)` in a `useEffect` — clean up on unmount.
 
 ---
