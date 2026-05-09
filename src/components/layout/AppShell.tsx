@@ -23,17 +23,17 @@ export function AppShell() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-svh overflow-hidden bg-gray-50">
       <Sidebar collapsed={collapsed} onToggle={toggle} />
       <Header sidebarCollapsed={collapsed} />
 
-      {/* Main content area */}
+      {/* Main content area — viewport-pinned; pages own their own scroll. */}
       <main
-        className={`transition-all duration-300 pt-16 min-h-screen ${
+        className={`transition-all duration-300 h-svh pt-16 flex flex-col overflow-hidden ${
           collapsed ? 'pl-16' : 'pl-64'
         }`}
       >
-        <div className="p-6">
+        <div className="flex-1 p-6 overflow-hidden flex flex-col min-h-0">
           <Outlet />
         </div>
       </main>

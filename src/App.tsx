@@ -9,6 +9,7 @@ import { Dashboard } from './pages/Dashboard'
 import { LiveNews } from './pages/LiveNews'
 
 import { Employee } from './pages/hrm/Employee'
+import { EmployeeDetail } from './pages/hrm/EmployeeDetail'
 import { Leave } from './pages/hrm/Leave'
 import { Payrolls } from './pages/hrm/Payrolls'
 import { Recruitment } from './pages/hrm/Recruitment'
@@ -59,6 +60,7 @@ function AppRoutes() {
         <Route path="/live-news" element={<LiveNews />} />
 
         <Route path="/hrm/employees" element={<Employee />} />
+        <Route path="/hrm/employees/:id" element={<EmployeeDetail />} />
         <Route path="/hrm/leave" element={<Leave />} />
         <Route path="/hrm/payrolls" element={<Payrolls />} />
         <Route path="/hrm/recruitment" element={<Recruitment />} />

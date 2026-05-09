@@ -1,0 +1,802 @@
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft, ChevronDown, FileText, Loader2, Plus, Save, Trash2, Upload, X } from 'lucide-react'
+import { Combobox } from '../../components/ui/Combobox'
+import { usePageLoad } from '../../hooks/usePageLoad'
+import { Sk, SkPageHeader } from '../../components/ui/Skeleton'
+import { getEmployee, updateEmployee, getDepartments, getDesignations, getGenders } from '../../services/hrm'
+import type { Employee } from '../../types/hrm'
+import {
+  FormFields,
+  fromEmployee,
+  validate,
+  type FormData,
+  type DropdownOptions,
+} from './EmployeeForm'
+
+// ─── Tabs ──────────────────────────────────────────────────────────────────────
+type TabId = 'overview' | 'details' | 'contacts' | 'certificates' | 'salary'
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'details', label: 'Details' },
+  { id: 'contacts', label: 'Contacts & Dependants' },
+  { id: 'certificates', label: 'Certificates' },
+  { id: 'salary', label: 'Salary' },
+]
+
+// ─── Tab-specific state types ──────────────────────────────────────────────────
+interface JoiningDetails {
+  jobApplicant: string
+  offerDate: string
+  confirmationDate: string
+  contractEndDate: string
+  noticeDays: string
+  healthInsurance: string
+}
+
+const EMPTY_JOINING: JoiningDetails = {
+  jobApplicant: '',
+  offerDate: '',
+  confirmationDate: '',
+  contractEndDate: '',
+  noticeDays: '',
+  healthInsurance: '',
+}
+
+interface ContactsState {
+  currentAddress: string
+  permanentAddress: string
+  emergencyContactName: string
+  emergencyPhone: string
+  emergencyRelation: string
+}
+
+const EMPTY_CONTACTS: ContactsState = {
+  currentAddress: '',
+  permanentAddress: '',
+  emergencyContactName: '',
+  emergencyPhone: '',
+  emergencyRelation: '',
+}
+
+interface Dependant {
+  id: string
+  fullName: string
+  ssn: string
+  frontId: File | null
+  backId: File | null
+  dateOfBirth: string
+  relation: string
+}
+
+interface Certificate {
+  id: string
+  trainingCenter: string
+  qualification: string
+  graduatedDate: string
+  expiryDate: string
+  file: File | null
+}
+
+function uid(): string {
+  return Math.random().toString(36).slice(2, 11)
+}
+
+function newDependant(): Dependant {
+  return { id: uid(), fullName: '', ssn: '', frontId: null, backId: null, dateOfBirth: '', relation: '' }
+}
+
+function newCertificate(): Certificate {
+  return { id: uid(), trainingCenter: '', qualification: '', graduatedDate: '', expiryDate: '', file: null }
+}
+
+// ─── Collapsible section ───────────────────────────────────────────────────────
+interface CollapsibleProps {
+  title: string
+  open: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}
+
+function Collapsible({ title, open, onToggle, children }: CollapsibleProps) {
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50/60 transition-colors"
+      >
+        <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
+        <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <div className="px-4 pb-4 pt-1 border-t border-gray-100">{children}</div>}
+    </div>
+  )
+}
+
+// ─── File-upload cell (used by certificates + dependants) ──────────────────────
+interface FileCellProps {
+  file: File | null
+  onChange: (f: File | null) => void
+  label?: string
+}
+
+function FileCell({ file, onChange, label = 'Upload' }: FileCellProps) {
+  if (file) {
+    return (
+      <div className="flex items-center gap-1.5 min-w-0">
+        <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
+        <span className="text-xs text-gray-700 truncate max-w-[120px]">{file.name}</span>
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className="text-gray-400 hover:text-red-500 flex-shrink-0"
+          aria-label="Remove file"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    )
+  }
+  return (
+    <label className="inline-flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded cursor-pointer">
+      <Upload className="w-3.5 h-3.5" />
+      {label}
+      <input
+        type="file"
+        className="hidden"
+        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+      />
+    </label>
+  )
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────────
+export function EmployeeDetail() {
+  const { id = '' } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const pageLoading = usePageLoad()
+
+  const [employee, setEmployee] = useState<Employee | null>(null)
+  const [fetchLoading, setFetchLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+
+  const [tab, setTab] = useState<TabId>('overview')
+  const [tabDirection, setTabDirection] = useState<'right' | 'left'>('right')
+
+  const [form, setForm] = useState<FormData | null>(null)
+  const [errors, setErrors] = useState<Partial<FormData>>({})
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [errorShaking, setErrorShaking] = useState(false)
+  const [shakingFields, setShakingFields] = useState<Set<keyof FormData>>(new Set())
+
+  // Tab-specific state — in-memory only
+  const [joining, setJoining] = useState<JoiningDetails>(EMPTY_JOINING)
+  const [contacts, setContacts] = useState<ContactsState>(EMPTY_CONTACTS)
+  const [addressOpen, setAddressOpen] = useState(true)
+  const [dependantsOpen, setDependantsOpen] = useState(true)
+  const [dependants, setDependants] = useState<Dependant[]>([])
+  const [certificates, setCertificates] = useState<Certificate[]>([])
+  const [selectedCerts, setSelectedCerts] = useState<Set<string>>(new Set())
+
+  // Dropdown options
+  const [departments, setDepartments] = useState<string[]>([])
+  const [designations, setDesignations] = useState<string[]>([])
+  const [genders, setGenders] = useState<string[]>([])
+  const [loadingDepartments, setLoadingDepartments] = useState(true)
+  const [loadingDesignations, setLoadingDesignations] = useState(true)
+  const [loadingGenders, setLoadingGenders] = useState(true)
+
+  // Fetch employee + dropdown lookups
+  useEffect(() => {
+    if (!id) return
+    let alive = true
+    setFetchLoading(true)
+    getEmployee(id)
+      .then((emp) => {
+        if (!alive) return
+        setEmployee(emp)
+        setForm(fromEmployee(emp))
+        setFetchError(null)
+      })
+      .catch((err) => {
+        if (alive) setFetchError(err instanceof Error ? err.message : 'Failed to load employee.')
+      })
+      .finally(() => { if (alive) setFetchLoading(false) })
+    getDepartments()
+      .then((data) => { if (alive) setDepartments(data) })
+      .catch(() => { /* leave empty; surface on submit */ })
+      .finally(() => { if (alive) setLoadingDepartments(false) })
+    getDesignations()
+      .then((data) => { if (alive) setDesignations(data) })
+      .catch(() => { /* leave empty; surface on submit */ })
+      .finally(() => { if (alive) setLoadingDesignations(false) })
+    getGenders()
+      .then((data) => { if (alive) setGenders(data) })
+      .catch(() => { /* leave empty; surface on submit */ })
+      .finally(() => { if (alive) setLoadingGenders(false) })
+    return () => { alive = false }
+  }, [id])
+
+  function changeTab(next: TabId) {
+    if (next === tab) return
+    const nextIdx = TABS.findIndex((t) => t.id === next)
+    const currIdx = TABS.findIndex((t) => t.id === tab)
+    setTabDirection(nextIdx >= currIdx ? 'right' : 'left')
+    setTab(next)
+  }
+
+  function set(field: keyof FormData, value: string) {
+    setForm((prev) => (prev ? { ...prev, [field]: value } : prev))
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: '' }))
+  }
+
+  function stopShake(field: keyof FormData) {
+    setShakingFields((prev) => { const n = new Set(prev); n.delete(field); return n })
+  }
+
+  function setJoiningField<K extends keyof JoiningDetails>(field: K, value: JoiningDetails[K]) {
+    setJoining((prev) => ({ ...prev, [field]: value }))
+  }
+
+  function setContactField<K extends keyof ContactsState>(field: K, value: ContactsState[K]) {
+    setContacts((prev) => ({ ...prev, [field]: value }))
+  }
+
+  function updateDependant<K extends keyof Dependant>(depId: string, field: K, value: Dependant[K]) {
+    setDependants((prev) => prev.map((d) => (d.id === depId ? { ...d, [field]: value } : d)))
+  }
+  function removeDependant(depId: string) {
+    setDependants((prev) => prev.filter((d) => d.id !== depId))
+  }
+
+  function updateCertificate<K extends keyof Certificate>(certId: string, field: K, value: Certificate[K]) {
+    setCertificates((prev) => prev.map((c) => (c.id === certId ? { ...c, [field]: value } : c)))
+  }
+  function toggleCertSelected(certId: string, checked: boolean) {
+    setSelectedCerts((prev) => {
+      const n = new Set(prev)
+      if (checked) n.add(certId)
+      else n.delete(certId)
+      return n
+    })
+  }
+  function toggleAllCertsSelected(checked: boolean) {
+    setSelectedCerts(checked ? new Set(certificates.map((c) => c.id)) : new Set())
+  }
+  function deleteSelectedCertificates() {
+    setCertificates((prev) => prev.filter((c) => !selectedCerts.has(c.id)))
+    setSelectedCerts(new Set())
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form || !employee) return
+    const v = validate(form)
+    setErrors(v)
+    if (Object.keys(v).length > 0) {
+      setShakingFields(new Set(Object.keys(v) as (keyof FormData)[]))
+      changeTab('overview')
+      return
+    }
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      const updated = await updateEmployee(employee.id, {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        department: form.department,
+        position: form.position.trim(),
+        gender: form.gender,
+        dateOfBirth: form.dateOfBirth,
+        status: form.status,
+        joinDate: form.joinDate,
+      })
+      setEmployee(updated)
+      setForm(fromEmployee(updated))
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to update employee.')
+      setErrorShaking(true)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  function goBack() {
+    navigate('/hrm/employees')
+  }
+
+  const dropdownOptions: DropdownOptions = {
+    departments, designations, genders,
+    loadingDepartments, loadingDesignations, loadingGenders,
+  }
+
+  const loading = pageLoading || fetchLoading
+
+  if (loading) {
+    return (
+      <>
+        <SkPageHeader hasAction={false} />
+        <div className="card overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+            <Sk className="w-9 h-9 rounded-lg" />
+            <Sk className="w-10 h-10 rounded-full" />
+            <div className="space-y-2">
+              <Sk className="h-4 w-40 rounded" />
+              <Sk className="h-3 w-56 rounded" />
+            </div>
+          </div>
+          <div className="px-6 py-3 border-b border-gray-100 flex gap-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Sk key={i} className="h-5 w-20 rounded" />
+            ))}
+          </div>
+          <div className="p-6 space-y-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Sk key={i} className="h-10 w-full rounded-lg" />
+            ))}
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  if (fetchError || !employee || !form) {
+    return (
+      <div className="card p-12 text-center text-red-500">
+        <p>{fetchError ?? 'Employee not found.'}</p>
+        <button onClick={goBack} className="btn-secondary mt-4 inline-flex items-center gap-2">
+          <ArrowLeft className="w-4 h-4" />
+          Back to Employees
+        </button>
+      </div>
+    )
+  }
+
+  const showFooter = tab === 'overview' || tab === 'details' || tab === 'contacts'
+
+  return (
+    <div className="card flex-1 flex flex-col overflow-hidden min-h-0">
+      {/* Header — pinned */}
+      <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 flex-shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={goBack}
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+            aria-label="Back to employee list"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className={`w-10 h-10 rounded-full ${employee.avatarBg} flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>
+            {employee.avatarInitials}
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-gray-900 truncate">{employee.name}</h2>
+            <p className="text-sm text-gray-500 truncate">{employee.email}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Tab strip — pinned */}
+      <div className="border-b border-gray-100 px-6 flex gap-1 overflow-x-auto flex-shrink-0">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => changeTab(t.id)}
+            className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+              tab === t.id
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={handleSubmit} noValidate className="flex-1 flex flex-col overflow-hidden min-h-0">
+        {/* Body — scrolls */}
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 space-y-5">
+          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${submitError ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>
+            <div
+              className={`p-3 bg-red-50 border border-red-200 rounded-lg ${errorShaking ? 'field-shake' : ''}`}
+              onAnimationEnd={() => setErrorShaking(false)}
+            >
+              <span className="text-red-600 text-sm">{submitError}</span>
+            </div>
+          </div>
+
+          <div
+            key={tab}
+            className={tabDirection === 'right' ? 'tab-enter-right' : 'tab-enter-left'}
+          >
+            {/* Overview */}
+            {tab === 'overview' && (
+              <FormFields
+                form={form}
+                errors={errors}
+                shakingFields={shakingFields}
+                onChange={set}
+                onShakeEnd={stopShake}
+                options={dropdownOptions}
+              />
+            )}
+
+            {/* Details */}
+            {tab === 'details' && (
+              <div className="space-y-5">
+                <section>
+                  <h3 className="font-semibold text-gray-900 text-sm mb-3">Joining Information</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Job Applicant</label>
+                      <Combobox
+                        options={[]}
+                        value={joining.jobApplicant ? [joining.jobApplicant] : []}
+                        onChange={(vs) => setJoiningField('jobApplicant', vs[0] ?? '')}
+                        max={1}
+                        placeholder="Link a job applicant"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Offer Date</label>
+                      <input
+                        type="date"
+                        value={joining.offerDate}
+                        onChange={(e) => setJoiningField('offerDate', e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirmation Date</label>
+                      <input
+                        type="date"
+                        value={joining.confirmationDate}
+                        onChange={(e) => setJoiningField('confirmationDate', e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Contract End Date</label>
+                      <input
+                        type="date"
+                        value={joining.contractEndDate}
+                        onChange={(e) => setJoiningField('contractEndDate', e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Notice (days) on Resignation</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={joining.noticeDays}
+                        onChange={(e) => setJoiningField('noticeDays', e.target.value)}
+                        className="form-input"
+                        placeholder="e.g. 30"
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="font-semibold text-gray-900 text-sm mb-3">Health Insurance</h3>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Health Insurance Provider</label>
+                    <Combobox
+                      options={[]}
+                      value={joining.healthInsurance ? [joining.healthInsurance] : []}
+                      onChange={(vs) => setJoiningField('healthInsurance', vs[0] ?? '')}
+                      max={1}
+                      placeholder="Select a provider"
+                    />
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {/* Contacts & Dependants */}
+            {tab === 'contacts' && (
+              <div className="space-y-4">
+                <Collapsible title="Address" open={addressOpen} onToggle={() => setAddressOpen((o) => !o)}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Current Address</label>
+                      <textarea
+                        rows={3}
+                        value={contacts.currentAddress}
+                        onChange={(e) => setContactField('currentAddress', e.target.value)}
+                        className="form-input"
+                        placeholder="Street, city, postal code"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Permanent Address</label>
+                      <textarea
+                        rows={3}
+                        value={contacts.permanentAddress}
+                        onChange={(e) => setContactField('permanentAddress', e.target.value)}
+                        className="form-input"
+                        placeholder="Street, city, postal code"
+                      />
+                    </div>
+                  </div>
+                </Collapsible>
+
+                <section className="border border-gray-200 rounded-lg bg-white">
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <h3 className="font-semibold text-gray-900 text-sm">Emergency Contact</h3>
+                  </div>
+                  <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Contact Name</label>
+                      <input
+                        type="text"
+                        value={contacts.emergencyContactName}
+                        onChange={(e) => setContactField('emergencyContactName', e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Emergency Phone 1</label>
+                      <input
+                        type="tel"
+                        value={contacts.emergencyPhone}
+                        onChange={(e) => setContactField('emergencyPhone', e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Relation</label>
+                      <input
+                        type="text"
+                        value={contacts.emergencyRelation}
+                        onChange={(e) => setContactField('emergencyRelation', e.target.value)}
+                        className="form-input"
+                        placeholder="e.g. Spouse, Parent"
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <Collapsible
+                  title={`Dependants${dependants.length > 0 ? ` (${dependants.length})` : ''}`}
+                  open={dependantsOpen}
+                  onToggle={() => setDependantsOpen((o) => !o)}
+                >
+                  <div className="space-y-3">
+                    {dependants.length === 0 && (
+                      <p className="text-sm text-gray-400">No dependants added.</p>
+                    )}
+                    {dependants.map((d, idx) => (
+                      <div key={d.id} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            Dependant #{idx + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeDependant(d.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            aria-label="Remove dependant"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Full Name</label>
+                            <input
+                              type="text"
+                              value={d.fullName}
+                              onChange={(e) => updateDependant(d.id, 'fullName', e.target.value)}
+                              className="form-input"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">SSN / ID</label>
+                            <input
+                              type="text"
+                              value={d.ssn}
+                              onChange={(e) => updateDependant(d.id, 'ssn', e.target.value)}
+                              className="form-input"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Date of Birth</label>
+                            <input
+                              type="date"
+                              value={d.dateOfBirth}
+                              onChange={(e) => updateDependant(d.id, 'dateOfBirth', e.target.value)}
+                              className="form-input"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Relation</label>
+                            <input
+                              type="text"
+                              value={d.relation}
+                              onChange={(e) => updateDependant(d.id, 'relation', e.target.value)}
+                              className="form-input"
+                              placeholder="e.g. Child, Spouse"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Front of ID</label>
+                            <FileCell
+                              file={d.frontId}
+                              onChange={(f) => updateDependant(d.id, 'frontId', f)}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Back of ID</label>
+                            <FileCell
+                              file={d.backId}
+                              onChange={(f) => updateDependant(d.id, 'backId', f)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setDependants((prev) => [...prev, newDependant()])}
+                      className="btn-secondary flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Dependant
+                    </button>
+                  </div>
+                </Collapsible>
+              </div>
+            )}
+
+            {/* Certificates */}
+            {tab === 'certificates' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-end gap-2">
+                  {selectedCerts.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={deleteSelectedCertificates}
+                      className="btn-danger flex items-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete ({selectedCerts.size})
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setCertificates((prev) => [...prev, newCertificate()])}
+                    className="btn-primary flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Certificate
+                  </button>
+                </div>
+
+                <div className="border border-gray-200 rounded-lg overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th className="table-th w-10">
+                          <input
+                            type="checkbox"
+                            checked={certificates.length > 0 && selectedCerts.size === certificates.length}
+                            onChange={(e) => toggleAllCertsSelected(e.target.checked)}
+                            aria-label="Select all certificates"
+                          />
+                        </th>
+                        <th className="table-th">Training Center</th>
+                        <th className="table-th">Qualification</th>
+                        <th className="table-th">Graduated Date</th>
+                        <th className="table-th">Expiry Date</th>
+                        <th className="table-th">Upload</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {certificates.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="text-center py-8 text-sm text-gray-400">
+                            No certificates yet. Click “Add Certificate” to insert a row.
+                          </td>
+                        </tr>
+                      )}
+                      {certificates.map((c) => (
+                        <tr key={c.id} className="hover:bg-gray-50/40">
+                          <td className="px-4 py-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedCerts.has(c.id)}
+                              onChange={(e) => toggleCertSelected(c.id, e.target.checked)}
+                              aria-label="Select certificate"
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <input
+                              type="text"
+                              value={c.trainingCenter}
+                              onChange={(e) => updateCertificate(c.id, 'trainingCenter', e.target.value)}
+                              className="form-input"
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <input
+                              type="text"
+                              value={c.qualification}
+                              onChange={(e) => updateCertificate(c.id, 'qualification', e.target.value)}
+                              className="form-input"
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <input
+                              type="date"
+                              value={c.graduatedDate}
+                              onChange={(e) => updateCertificate(c.id, 'graduatedDate', e.target.value)}
+                              className="form-input"
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <input
+                              type="date"
+                              value={c.expiryDate}
+                              onChange={(e) => updateCertificate(c.id, 'expiryDate', e.target.value)}
+                              className="form-input"
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <FileCell
+                              file={c.file}
+                              onChange={(f) => updateCertificate(c.id, 'file', f)}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Salary */}
+            {tab === 'salary' && (
+              <div className="text-center py-12 text-gray-400 text-sm">
+                <p>Salary information is not configured for this employee.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {showFooter && (
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex-shrink-0">
+            <button
+              type="button"
+              onClick={goBack}
+              disabled={submitting}
+              className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+            <button type="submit" disabled={submitting} className="btn-primary min-w-[140px]">
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save Changes
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </form>
+    </div>
+  )
+}

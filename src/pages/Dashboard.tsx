@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { Users, Truck, Briefcase, CalendarOff, UserPlus, Car, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import { StatCard } from '../components/ui/StatCard'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Badge } from '../components/ui/Badge'
+import { Combobox } from '../components/ui/Combobox'
 import { usePageLoad } from '../hooks/usePageLoad'
 import { Sk, SkPageHeader, SkStatCards, SkActivityItem } from '../components/ui/Skeleton'
 
@@ -100,6 +102,8 @@ const upcomingEvents = [
 
 export function Dashboard() {
   const loading = usePageLoad()
+  const [growthPeriod, setGrowthPeriod] = useState('Last 12 months')
+  const [fleetPeriod, setFleetPeriod] = useState('This week')
   if (loading) return <DashboardSkeleton />
   return (
     <div>
@@ -192,11 +196,16 @@ export function Dashboard() {
               <h2 className="font-semibold text-gray-900">Employee Growth</h2>
               <p className="text-xs text-gray-400 mt-0.5">Headcount trend over the last 12 months</p>
             </div>
-            <select className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500">
-              <option>Last 12 months</option>
-              <option>Last 6 months</option>
-              <option>This year</option>
-            </select>
+            <div className="w-44">
+              <Combobox
+                options={['Last 12 months', 'Last 6 months', 'This year']}
+                value={[growthPeriod]}
+                onChange={(vs) => setGrowthPeriod(vs[0] ?? 'Last 12 months')}
+                max={1}
+                clearable={false}
+                size="sm"
+              />
+            </div>
           </div>
           <div className="h-52 bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl flex items-end justify-around px-4 pb-4 gap-2">
             {[180, 192, 198, 205, 210, 218, 222, 228, 232, 238, 244, 248].map((val, i) => {
@@ -222,11 +231,16 @@ export function Dashboard() {
               <h2 className="font-semibold text-gray-900">Fleet Utilization</h2>
               <p className="text-xs text-gray-400 mt-0.5">Active vs idle vehicles this week</p>
             </div>
-            <select className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500">
-              <option>This week</option>
-              <option>Last week</option>
-              <option>This month</option>
-            </select>
+            <div className="w-36">
+              <Combobox
+                options={['This week', 'Last week', 'This month']}
+                value={[fleetPeriod]}
+                onChange={(vs) => setFleetPeriod(vs[0] ?? 'This week')}
+                max={1}
+                clearable={false}
+                size="sm"
+              />
+            </div>
           </div>
           <div className="h-52 flex items-center justify-center">
             <div className="relative w-40 h-40">

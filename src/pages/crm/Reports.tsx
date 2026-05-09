@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Download, TrendingUp, TrendingDown, Users, Truck, DollarSign, BarChart3 } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { Combobox } from '../../components/ui/Combobox'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkStatCards, SkBarChart, SkTable } from '../../components/ui/Skeleton'
 
@@ -60,14 +61,15 @@ export function Reports() {
         subtitle="Sales performance and pipeline analytics"
         action={
           <div className="flex items-center gap-2">
-            <select
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="2026">2026</option>
-              <option value="2025">2025</option>
-            </select>
+            <div className="w-32">
+              <Combobox
+                options={['2026', '2025']}
+                value={[period]}
+                onChange={(vs) => setPeriod(vs[0] ?? '2026')}
+                max={1}
+                clearable={false}
+              />
+            </div>
             <button className="btn-secondary flex items-center gap-2">
               <Download className="w-4 h-4" />
               Export

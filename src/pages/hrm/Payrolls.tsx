@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Download, Eye } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
+import { Combobox } from '../../components/ui/Combobox'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { Sk, SkPageHeader, SkTable } from '../../components/ui/Skeleton'
 import type { PayStatus, PayrollRecord } from '../../types/hrm'
@@ -57,15 +58,15 @@ export function Payrolls() {
         subtitle="Manage monthly payroll processing"
         action={
           <div className="flex items-center gap-2">
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option>April 2026</option>
-              <option>March 2026</option>
-              <option>February 2026</option>
-            </select>
+            <div className="w-44">
+              <Combobox
+                options={['April 2026', 'March 2026', 'February 2026']}
+                value={[selectedMonth]}
+                onChange={(vs) => setSelectedMonth(vs[0] ?? 'April 2026')}
+                max={1}
+                clearable={false}
+              />
+            </div>
             <button className="btn-secondary flex items-center gap-2">
               <Download className="w-4 h-4" />
               Export

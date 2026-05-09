@@ -5,6 +5,7 @@ import type { Employee } from '../types/hrm'
 import {
   employeeCodec,
   toFrappeEmployeeDoc,
+  toFrappeEmployeeUpdate,
   type FrappeEmployee,
   type CreateEmployeeInput,
 } from '../transformers/employee'
@@ -40,6 +41,34 @@ export async function getDepartments(): Promise<string[]> {
   return (data.message ?? []).map((d) => d.name)
 }
 
+export async function getDesignations(): Promise<string[]> {
+  const params = new URLSearchParams({
+    doctype: 'Designation',
+    fields: JSON.stringify(['name']),
+    limit_page_length: '0',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<{ name: string }>
+  if (!res.ok) {
+    throw new Error(data.exc ?? 'Failed to fetch designations.')
+  }
+  return (data.message ?? []).map((d) => d.name)
+}
+
+export async function getGenders(): Promise<string[]> {
+  const params = new URLSearchParams({
+    doctype: 'Gender',
+    fields: JSON.stringify(['name']),
+    limit_page_length: '0',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<{ name: string }>
+  if (!res.ok) {
+    throw new Error(data.exc ?? 'Failed to fetch genders.')
+  }
+  return (data.message ?? []).map((g) => g.name)
+}
+
 export async function getEmployees(): Promise<Employee[]> {
   const params = new URLSearchParams({
     doctype: 'Employee',
@@ -51,6 +80,8 @@ export async function getEmployees(): Promise<Employee[]> {
       'cell_number',
       'department',
       'designation',
+      'gender',
+      'date_of_birth',
       'status',
       'date_of_joining',
     ]),
@@ -62,6 +93,32 @@ export async function getEmployees(): Promise<Employee[]> {
     throw new Error(data.exc ?? 'Failed to fetch employees.')
   }
   return (data.message ?? []).map(employeeCodec.decode)
+}
+
+export async function getEmployee(id: string): Promise<Employee> {
+  const res = await http(`${FRAPPE_BASE}/api/resource/Employee/${encodeURIComponent(id)}`)
+  const data = (await res.json()) as { data?: FrappeEmployee; exc?: string }
+  if (!res.ok || !data.data) {
+    throw new Error(data.exc ?? 'Failed to fetch employee.')
+  }
+  return employeeCodec.decode(data.data)
+}
+
+export async function updateEmployee(id: string, input: CreateEmployeeInput): Promise<Employee> {
+  const body = toFrappeEmployeeUpdate(input)
+  const res = await http(`${FRAPPE_BASE}/api/resource/Employee/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  const data = (await res.json()) as { data?: FrappeEmployee; exc?: string; _server_messages?: string }
+  if (!res.ok || !data.data) {
+    throw new Error(data.exc ?? data._server_messages ?? 'Failed to update employee.')
+  }
+  return employeeCodec.decode(data.data)
 }
 
 export async function createEmployee(input: CreateEmployeeInput): Promise<Employee> {

@@ -8,6 +8,8 @@ export interface Employee {
   phone: string
   department: string
   position: string
+  gender: string
+  dateOfBirth: string
   status: EmployeeStatus
   joinDate: string
   avatarInitials: string

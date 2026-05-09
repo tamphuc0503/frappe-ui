@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react'
 import type { User, AuthContextType } from '../types/auth'
-import { frappeLogin, clearSid } from '../services/auth'
+import { frappeLogin, clearSid, clearApiCredentials } from '../services/auth'
 import { getCompany, setCompanyCache, clearCompanyCache } from '../services/company'
 
 export const AuthContext = createContext<AuthContextType | null>(null)
@@ -68,6 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     clearSid()
+    clearApiCredentials()
     clearCompanyCache()
     setUser(null)
   }, [])

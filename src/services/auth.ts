@@ -4,11 +4,18 @@ import type { User } from '../types/auth'
 
 const SID_STORAGE_KEY = 'oceanfleet_sid'
 const AUTH_STORAGE_KEY = 'oceanfleet_auth'
+const API_KEY_STORAGE_KEY = 'oceanfleet_api_key'
+const API_SECRET_STORAGE_KEY = 'oceanfleet_api_secret'
 
 interface FrappeLoginResponse {
   message?: string
   full_name?: string
   home_page?: string
+  exc?: string
+}
+
+interface GenerateKeysResponse {
+  message?: { api_key?: string; api_secret?: string }
   exc?: string
 }
 
@@ -34,6 +41,32 @@ export function setSid(sid: string): void {
 
 export function clearSid(): void {
   localStorage.removeItem(SID_STORAGE_KEY)
+}
+
+export function getApiKey(): string | null {
+  try {
+    return localStorage.getItem(API_KEY_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function getApiSecret(): string | null {
+  try {
+    return localStorage.getItem(API_SECRET_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function setApiCredentials(apiKey: string, apiSecret: string): void {
+  localStorage.setItem(API_KEY_STORAGE_KEY, apiKey)
+  localStorage.setItem(API_SECRET_STORAGE_KEY, apiSecret)
+}
+
+export function clearApiCredentials(): void {
+  localStorage.removeItem(API_KEY_STORAGE_KEY)
+  localStorage.removeItem(API_SECRET_STORAGE_KEY)
 }
 
 export function getUserCache(): User | null {
@@ -67,7 +100,34 @@ export async function frappeLogin(usr: string, pwd: string): Promise<{ fullName:
   const sid = extractSid(res.headers)
   if (sid) setSid(sid)
 
+  await generateApiKeys(usr)
+
   const roles = await getUserRoles().catch(() => [] as string[])
 
   return { fullName: data.full_name ?? '', roles }
+}
+
+export async function generateApiKeys(user: string): Promise<{ apiKey: string; apiSecret: string }> {
+  const url = `${FRAPPE_BASE}/api/method/frappe.core.doctype.user.user.generate_keys`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ user }),
+  })
+
+  const data = (await res.json()) as GenerateKeysResponse
+  console.debug('[API] POST', url, data)
+
+  const apiKey = data.message?.api_key
+  const apiSecret = data.message?.api_secret
+  if (!res.ok || !apiKey || !apiSecret) {
+    throw new Error(data.exc ?? 'Failed to generate API keys.')
+  }
+
+  setApiCredentials(apiKey, apiSecret)
+  return { apiKey, apiSecret }
 }

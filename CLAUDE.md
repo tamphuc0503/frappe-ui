@@ -124,6 +124,26 @@ src/
 
 ---
 
+## Layout & Scrolling
+
+- **Components own their own vertical scroll.** When a component's content can exceed the viewport (long forms, tables, tab panels, dialogs, side panels, master-detail views), it must scroll inside its own `overflow-y-auto` region. The page (`document.body`) and the AppShell content area must never become the scroll container — sticky headers/sidebars/footers, the page header, and tab strips stay pinned while only the inner content scrolls.
+- **Never rely on the document or tab scrollbar.** That includes: don't let a long card push the page taller than the viewport, don't let a tab panel grow the parent card past the viewport, don't depend on the browser to scroll a modal.
+- **Pattern.** Scope the height to the viewport (or remaining space) and put `overflow-y-auto` on the inner region:
+  ```tsx
+  // ✅ The card sticks to the viewport; only the body scrolls.
+  <div className="card flex flex-col max-h-[calc(100svh-7rem)]">
+    <div className="px-6 py-5 border-b border-gray-100">{/* header */}</div>
+    <div className="px-6 py-3 border-b border-gray-100">{/* tabs */}</div>
+    <div className="flex-1 overflow-y-auto px-6 py-5">{/* scrollable content */}</div>
+    <div className="px-6 py-4 border-t border-gray-100">{/* footer */}</div>
+  </div>
+  ```
+- Modals/dialogs use `max-h-[90vh] overflow-y-auto` on the panel body — the page behind them does not scroll.
+- Tables that can grow tall use `overflow-y-auto` on the wrapping `<div>` plus `max-h-[…]`; for horizontal overflow, pair with `overflow-x-auto`.
+- Use `100svh` (small-viewport height) for mobile-safe sizing; `100vh` causes layout shift on iOS when the URL bar shows/hides.
+
+---
+
 ## Animation
 
 All keyframes live in `index.css`. Current animations:

@@ -15,6 +15,8 @@ export interface FrappeEmployee {
   cell_number?: string
   department?: string
   designation?: string
+  gender?: string
+  date_of_birth?: string
   status?: string
   date_of_joining?: string
 }
@@ -25,6 +27,8 @@ export interface CreateEmployeeInput {
   phone: string
   department: string
   position: string
+  gender: string
+  dateOfBirth: string
   status: EmployeeStatus
   joinDate: string
 }
@@ -66,6 +70,8 @@ export const employeeCodec: Codec<Employee, FrappeEmployee> = {
       phone: frappe.cell_number || '',
       department: frappe.department || '',
       position: frappe.designation || '',
+      gender: frappe.gender || '',
+      dateOfBirth: frappe.date_of_birth || '',
       status: decodeStatus(frappe.status),
       joinDate: frappe.date_of_joining || '',
       avatarInitials: deriveInitials(fullName),
@@ -80,10 +86,28 @@ export const employeeCodec: Codec<Employee, FrappeEmployee> = {
       cell_number: emp.phone || undefined,
       department: emp.department || undefined,
       designation: emp.position || undefined,
+      gender: emp.gender || undefined,
+      date_of_birth: emp.dateOfBirth || undefined,
       status: encodeStatus(emp.status),
       date_of_joining: emp.joinDate || undefined,
     }
   },
+}
+
+// Build the payload for `PUT /api/resource/Employee/<name>`. No `doctype` /
+// `first_name` / `last_name` here — Frappe accepts a partial update body.
+export function toFrappeEmployeeUpdate(input: CreateEmployeeInput): Record<string, unknown> {
+  return {
+    employee_name: input.name.trim(),
+    company_email: input.email,
+    cell_number: input.phone,
+    department: input.department,
+    designation: input.position,
+    gender: input.gender,
+    date_of_birth: input.dateOfBirth,
+    status: encodeStatus(input.status),
+    date_of_joining: input.joinDate,
+  }
 }
 
 // Build the payload for `frappe.client.insert`. Asymmetric to the codec above
@@ -103,6 +127,8 @@ export function toFrappeEmployeeDoc(input: CreateEmployeeInput): Record<string, 
     cell_number: input.phone,
     department: input.department,
     designation: input.position,
+    gender: input.gender,
+    date_of_birth: input.dateOfBirth,
     status: encodeStatus(input.status),
     date_of_joining: input.joinDate,
   }
