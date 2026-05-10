@@ -1,6 +1,6 @@
 import { getApiKey, getApiSecret } from './auth'
 
-export const FRAPPE_BASE = 'http://localhost:8080'
+export const FRAPPE_BASE = 'https://oceanfleet.aprilsea.com'
 
 // All calls go through here authenticated by `Authorization: token <api_key>:<api_secret>`.
 // `credentials: 'omit'` ensures the browser does NOT send the sid cookie, so token auth

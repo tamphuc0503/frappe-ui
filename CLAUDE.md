@@ -192,6 +192,20 @@ export function MyPage() {
 
 ---
 
+## Detail Pages & Unsaved Changes
+
+Every page that loads a single record and lets the user edit it (e.g. `EmployeeDetail`) must handle dirty state explicitly.
+
+- **Cache the loaded snapshot.** When the record arrives from the API, store a `pristine` copy alongside the editable form state. The pristine copy is the source of truth for "have things changed?" — never compare the form to itself.
+- **Derive `dirty`, don't track it manually.** `const dirty = !deepEqual(form, pristine)` (use `JSON.stringify` for primitive-only shapes; introduce a real deep-equal helper only when the shape includes `File`, `Map`, or non-JSON-safe values). Avoid an `isDirty` boolean that you flip on every change — it goes out of sync.
+- **"Not saved" indicator next to the title.** When `dirty` is true, render a small status pill next to the page/record title: `<span className="ml-2 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Not saved</span>`. It disappears once a successful save updates `pristine` to the saved record.
+- **After a successful save, reset pristine.** `setPristine(updated); setForm(fromRecord(updated))` — otherwise the indicator sticks around even though the user *just* saved.
+- **Block navigation while dirty.** Use React Router 7's `useBlocker(({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname)` to intercept in-app navigation, and a `beforeunload` listener for browser close/refresh. Don't rely on a single `useEffect` cleanup — the user may navigate before unmount fires.
+- **Confirmation dialog has three options.** *Discard changes* (calls `blocker.proceed()`), *Stay on page* (calls `blocker.reset()`), and *Save & leave* (runs the save handler, then on success calls `blocker.proceed()`). The dialog uses the same sheet-from-top pattern as `AddEmployeeDialog`. Don't use `window.confirm` — it can't surface a Save action and looks foreign next to the rest of the UI.
+- **The Cancel/Back button on the page also runs through the blocker** — clicking it should programmatically navigate (e.g. `navigate(-1)` or `navigate('/hrm/employees')`), which `useBlocker` then catches. Don't show the dialog inline from Cancel; route everything through the same blocker so behavior is consistent across in-app navigation, sidebar clicks, the URL bar, and browser close.
+
+---
+
 ## Icons
 
 Use **Lucide React** exclusively. Import only what you use (tree-shaken automatically by Vite):

@@ -381,7 +381,7 @@ export function EmployeeDetail() {
       </div>
 
       {/* Tab strip — pinned */}
-      <div className="border-b border-gray-100 px-6 flex gap-1 overflow-x-auto flex-shrink-0">
+      <div className="border-b border-gray-100 px-6 flex gap-1 overflow-x-auto scrollbar-hide flex-shrink-0">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -657,108 +657,118 @@ export function EmployeeDetail() {
 
             {/* Certificates */}
             {tab === 'certificates' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-end gap-2">
-                  {selectedCerts.size > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  {certificates.length > 0 ? (
+                    <label className="inline-flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedCerts.size === certificates.length}
+                        onChange={(e) => toggleAllCertsSelected(e.target.checked)}
+                      />
+                      Select all
+                    </label>
+                  ) : <span />}
+                  <div className="flex items-center gap-2">
+                    {selectedCerts.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={deleteSelectedCertificates}
+                        className="btn-danger flex items-center gap-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete ({selectedCerts.size})
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={deleteSelectedCertificates}
-                      className="btn-danger flex items-center gap-2"
+                      onClick={() => setCertificates((prev) => [...prev, newCertificate()])}
+                      className="btn-primary flex items-center gap-2"
                     >
-                      <Trash2 className="w-4 h-4" />
-                      Delete ({selectedCerts.size})
+                      <Plus className="w-4 h-4" />
+                      Add Certificate
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setCertificates((prev) => [...prev, newCertificate()])}
-                    className="btn-primary flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Certificate
-                  </button>
+                  </div>
                 </div>
 
-                <div className="border border-gray-200 rounded-lg overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50 border-b border-gray-100">
-                      <tr>
-                        <th className="table-th w-10">
-                          <input
-                            type="checkbox"
-                            checked={certificates.length > 0 && selectedCerts.size === certificates.length}
-                            onChange={(e) => toggleAllCertsSelected(e.target.checked)}
-                            aria-label="Select all certificates"
-                          />
-                        </th>
-                        <th className="table-th">Training Center</th>
-                        <th className="table-th">Qualification</th>
-                        <th className="table-th">Graduated Date</th>
-                        <th className="table-th">Expiry Date</th>
-                        <th className="table-th">Upload</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {certificates.length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="text-center py-8 text-sm text-gray-400">
-                            No certificates yet. Click “Add Certificate” to insert a row.
-                          </td>
-                        </tr>
-                      )}
-                      {certificates.map((c) => (
-                        <tr key={c.id} className="hover:bg-gray-50/40">
-                          <td className="px-4 py-2">
-                            <input
-                              type="checkbox"
-                              checked={selectedCerts.has(c.id)}
-                              onChange={(e) => toggleCertSelected(c.id, e.target.checked)}
-                              aria-label="Select certificate"
-                            />
-                          </td>
-                          <td className="px-4 py-2">
-                            <input
-                              type="text"
-                              value={c.trainingCenter}
-                              onChange={(e) => updateCertificate(c.id, 'trainingCenter', e.target.value)}
-                              className="form-input"
-                            />
-                          </td>
-                          <td className="px-4 py-2">
-                            <input
-                              type="text"
-                              value={c.qualification}
-                              onChange={(e) => updateCertificate(c.id, 'qualification', e.target.value)}
-                              className="form-input"
-                            />
-                          </td>
-                          <td className="px-4 py-2">
-                            <input
-                              type="date"
-                              value={c.graduatedDate}
-                              onChange={(e) => updateCertificate(c.id, 'graduatedDate', e.target.value)}
-                              className="form-input"
-                            />
-                          </td>
-                          <td className="px-4 py-2">
-                            <input
-                              type="date"
-                              value={c.expiryDate}
-                              onChange={(e) => updateCertificate(c.id, 'expiryDate', e.target.value)}
-                              className="form-input"
-                            />
-                          </td>
-                          <td className="px-4 py-2">
-                            <FileCell
-                              file={c.file}
-                              onChange={(f) => updateCertificate(c.id, 'file', f)}
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {certificates.length === 0 && (
+                  <p className="text-sm text-gray-400">No certificates added.</p>
+                )}
+                {certificates.map((c, idx) => (
+                  <div key={c.id} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedCerts.has(c.id)}
+                          onChange={(e) => toggleCertSelected(c.id, e.target.checked)}
+                          aria-label="Select certificate"
+                        />
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Certificate #{idx + 1}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCertificates((prev) => prev.filter((x) => x.id !== c.id))
+                          setSelectedCerts((prev) => {
+                            const n = new Set(prev); n.delete(c.id); return n
+                          })
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        aria-label="Remove certificate"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Training Center</label>
+                        <input
+                          type="text"
+                          value={c.trainingCenter}
+                          onChange={(e) => updateCertificate(c.id, 'trainingCenter', e.target.value)}
+                          className="form-input"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Qualification</label>
+                        <input
+                          type="text"
+                          value={c.qualification}
+                          onChange={(e) => updateCertificate(c.id, 'qualification', e.target.value)}
+                          className="form-input"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Graduated Date</label>
+                        <input
+                          type="date"
+                          value={c.graduatedDate}
+                          onChange={(e) => updateCertificate(c.id, 'graduatedDate', e.target.value)}
+                          className="form-input"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Expiry Date</label>
+                        <input
+                          type="date"
+                          value={c.expiryDate}
+                          onChange={(e) => updateCertificate(c.id, 'expiryDate', e.target.value)}
+                          className="form-input"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Upload</label>
+                        <FileCell
+                          file={c.file}
+                          onChange={(f) => updateCertificate(c.id, 'file', f)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 

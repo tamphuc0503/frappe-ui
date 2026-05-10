@@ -91,6 +91,15 @@ p {
 .tab-enter-right { animation: tab-slide-from-right 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .tab-enter-left  { animation: tab-slide-from-left  0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* Hide scrollbar visuals while keeping scroll behavior. */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Skeleton shimmer */
 @keyframes shimmer {
   0%   { background-position: 200% 0; }

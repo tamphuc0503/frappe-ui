@@ -7,24 +7,24 @@ export function Login() {
   const navigate = useNavigate()
   const { login } = useAuth()
 
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [errorShaking, setErrorShaking] = useState(false)
-  const [shakingFields, setShakingFields] = useState<Set<'email' | 'password'>>(new Set())
+  const [shakingFields, setShakingFields] = useState<Set<'identifier' | 'password'>>(new Set())
 
-  function shakeClass(field: 'email' | 'password') {
+  function shakeClass(field: 'identifier' | 'password') {
     return shakingFields.has(field) ? 'field-shake' : ''
   }
 
-  function stopShake(field: 'email' | 'password') {
+  function stopShake(field: 'identifier' | 'password') {
     setShakingFields((prev) => { const n = new Set(prev); n.delete(field); return n })
   }
 
-  function shake(fields: Array<'email' | 'password'>) {
+  function shake(fields: Array<'identifier' | 'password'>) {
     setShakingFields(new Set(fields))
   }
 
@@ -32,10 +32,10 @@ export function Login() {
     e.preventDefault()
     setError('')
 
-    if (!email.trim()) {
-      setError('Please enter your email address.')
+    if (!identifier.trim()) {
+      setError('Please enter your username or email.')
       setErrorShaking(true)
-      shake(['email'])
+      shake(['identifier'])
       return
     }
     if (!password) {
@@ -46,12 +46,12 @@ export function Login() {
     }
 
     setLoading(true)
-    const result = await login(email.trim(), password)
+    const result = await login(identifier.trim(), password)
     setLoading(false)
 
     if (result.success) {
       if (rememberMe) {
-        localStorage.setItem('remember_email', email.trim())
+        localStorage.setItem('remember_email', identifier.trim())
       } else {
         localStorage.removeItem('remember_email')
       }
@@ -59,7 +59,7 @@ export function Login() {
     } else {
       setError(result.error ?? 'Login failed. Please try again.')
       setErrorShaking(true)
-      shake(['email', 'password'])
+      shake(['identifier', 'password'])
     }
   }
 
@@ -99,18 +99,18 @@ export function Login() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Email */}
-              <div className={shakeClass('email')} onAnimationEnd={() => stopShake('email')}>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="email">
-                  Email Address
+              {/* Username or Email */}
+              <div className={shakeClass('identifier')} onAnimationEnd={() => stopShake('identifier')}>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="identifier">
+                  Username or Email
                 </label>
                 <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
+                  id="identifier"
+                  type="text"
+                  autoComplete="username"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="username or you@company.com"
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
                 />
               </div>
