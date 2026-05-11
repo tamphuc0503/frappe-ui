@@ -23,6 +23,10 @@ import { ShiftAttendance } from './pages/hrm/ShiftAttendance'
 import { ClockInOut } from './pages/hrm/ClockInOut'
 
 import { MyTasks } from './pages/myspace/MyTasks'
+import { MyAssets } from './pages/myspace/MyAssets'
+import { MyLeaves } from './pages/myspace/MyLeaves'
+import { Payslips as MyPayslips } from './pages/myspace/Payslips'
+import { Profile } from './pages/myspace/Profile'
 
 import { Vehicles } from './pages/fleet/Vehicles'
 import { Drivers } from './pages/fleet/Drivers'
@@ -74,6 +78,10 @@ const router = createBrowserRouter(
         <Route path="/hrm/clock-in-out" element={<ClockInOut />} />
 
         <Route path="/my-space/tasks" element={<MyTasks />} />
+        <Route path="/my-space/assets" element={<MyAssets />} />
+        <Route path="/my-space/leaves" element={<MyLeaves />} />
+        <Route path="/my-space/payslips" element={<MyPayslips />} />
+        <Route path="/my-space/profile" element={<Profile />} />
 
         <Route path="/fleet/vehicles" element={<Vehicles />} />
         <Route path="/fleet/drivers" element={<Drivers />} />

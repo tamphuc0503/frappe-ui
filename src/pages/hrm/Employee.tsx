@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useFetchOnce } from '../../hooks/useFetchOnce'
 import { useNavigate } from 'react-router-dom'
 import { Search, Plus, Eye, Pencil, Filter, X, Loader2, RefreshCw } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -193,14 +194,12 @@ export function Employee() {
   const mountedRef = useRef(true)
   useEffect(() => () => { mountedRef.current = false }, [])
 
-  useEffect(() => {
-    let alive = true
+  useFetchOnce(() => {
     getEmployees()
-      .then((data) => { if (alive) { setEmployeeList(data); setError(null) } })
-      .catch((err) => { if (alive) setError(err instanceof Error ? err.message : 'Failed to load employees.') })
-      .finally(() => { if (alive) setFetchLoading(false) })
-    return () => { alive = false }
-  }, [])
+      .then((data) => { setEmployeeList(data); setError(null) })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load employees.'))
+      .finally(() => setFetchLoading(false))
+  })
 
   function refreshEmployees() {
     if (refreshing) return

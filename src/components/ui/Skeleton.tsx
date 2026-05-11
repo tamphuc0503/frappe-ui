@@ -169,6 +169,22 @@ export function SkKanbanCard() {
   )
 }
 
+export function SkAssetGrid({ count = 12 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="card overflow-hidden">
+          <Sk className="w-full aspect-square rounded-none" />
+          <div className="px-3 py-2.5 space-y-1.5">
+            <Sk className="h-3.5 w-3/4 rounded-md" />
+            <Sk className="h-3 w-1/2 rounded-md" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function SkKanbanColumn({ cards = 3 }: { cards?: number }) {
   return (
     <div className="flex-1 min-w-0">

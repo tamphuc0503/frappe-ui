@@ -73,13 +73,29 @@ interface FormFieldsProps {
   onShakeEnd: (field: keyof FormData) => void
   options: DropdownOptions
   firstInputRef?: React.Ref<HTMLInputElement>
-  emailReadOnly?: boolean
+  hideEmail?: boolean
 }
 
 export function FormFields({
-  form, errors, shakingFields, onChange, onShakeEnd, options, firstInputRef, emailReadOnly = false,
+  form, errors, shakingFields, onChange, onShakeEnd, options, firstInputRef, hideEmail = false,
 }: FormFieldsProps) {
   const shakeClass = (f: keyof FormData) => (shakingFields.has(f) ? 'field-shake' : '')
+
+  const phoneField = (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+        Phone Number <span className="text-xs text-gray-400">(optional)</span>
+      </label>
+      <input
+        type="tel"
+        value={form.phone}
+        onChange={(e) => onChange('phone', e.target.value)}
+        placeholder="+1 555 000 0000"
+        className="form-input"
+      />
+    </div>
+  )
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -97,33 +113,57 @@ export function FormFields({
           />
           {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
         </div>
-        <div className={shakeClass('email')} onAnimationEnd={() => onShakeEnd('email')}>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Email Address <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => onChange('email', e.target.value)}
-            readOnly={emailReadOnly}
-            placeholder="jane@oceanfleet.com"
-            className={`form-input ${errors.email ? 'border-red-400 focus:ring-red-400' : ''} ${emailReadOnly ? 'bg-gray-50 text-gray-600 cursor-default' : ''}`}
-          />
-          {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
-        </div>
+        {hideEmail ? (
+          phoneField
+        ) : (
+          <div className={shakeClass('email')} onAnimationEnd={() => onShakeEnd('email')}>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Email Address <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => onChange('email', e.target.value)}
+              placeholder="jane@oceanfleet.com"
+              className={`form-input ${errors.email ? 'border-red-400 focus:ring-red-400' : ''}`}
+            />
+            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+          </div>
+        )}
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Phone Number <span className="text-xs text-gray-400">(optional)</span>
-        </label>
-        <input
-          type="tel"
-          value={form.phone}
-          onChange={(e) => onChange('phone', e.target.value)}
-          placeholder="+1 555 000 0000"
-          className="form-input"
-        />
+      {!hideEmail && phoneField}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className={shakeClass('dateOfBirth')} onAnimationEnd={() => onShakeEnd('dateOfBirth')}>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Date of Birth <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="date"
+            value={form.dateOfBirth}
+            onChange={(e) => onChange('dateOfBirth', e.target.value)}
+            max={new Date().toISOString().slice(0, 10)}
+            className={`form-input ${errors.dateOfBirth ? 'border-red-400 focus:ring-red-400' : ''}`}
+          />
+          {errors.dateOfBirth && <p className="text-xs text-red-500 mt-1">{errors.dateOfBirth}</p>}
+        </div>
+        <div className={shakeClass('gender')} onAnimationEnd={() => onShakeEnd('gender')}>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Gender <span className="text-red-500">*</span>
+          </label>
+          <Combobox
+            options={options.genders}
+            value={form.gender ? [form.gender] : []}
+            onChange={(vs) => onChange('gender', vs[0] ?? '')}
+            max={1}
+            placeholder="Select gender"
+            loading={options.loadingGenders}
+            error={!!errors.gender}
+            onOpen={options.onOpenGenders}
+          />
+          {errors.gender && <p className="text-xs text-red-500 mt-1">{errors.gender}</p>}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -158,38 +198,6 @@ export function FormFields({
             onOpen={options.onOpenDesignations}
           />
           {errors.position && <p className="text-xs text-red-500 mt-1">{errors.position}</p>}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className={shakeClass('gender')} onAnimationEnd={() => onShakeEnd('gender')}>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Gender <span className="text-red-500">*</span>
-          </label>
-          <Combobox
-            options={options.genders}
-            value={form.gender ? [form.gender] : []}
-            onChange={(vs) => onChange('gender', vs[0] ?? '')}
-            max={1}
-            placeholder="Select gender"
-            loading={options.loadingGenders}
-            error={!!errors.gender}
-            onOpen={options.onOpenGenders}
-          />
-          {errors.gender && <p className="text-xs text-red-500 mt-1">{errors.gender}</p>}
-        </div>
-        <div className={shakeClass('dateOfBirth')} onAnimationEnd={() => onShakeEnd('dateOfBirth')}>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Date of Birth <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="date"
-            value={form.dateOfBirth}
-            onChange={(e) => onChange('dateOfBirth', e.target.value)}
-            max={new Date().toISOString().slice(0, 10)}
-            className={`form-input ${errors.dateOfBirth ? 'border-red-400 focus:ring-red-400' : ''}`}
-          />
-          {errors.dateOfBirth && <p className="text-xs text-red-500 mt-1">{errors.dateOfBirth}</p>}
         </div>
       </div>
 

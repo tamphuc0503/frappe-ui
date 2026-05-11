@@ -12,6 +12,8 @@ import {
   UserPlus,
   Clock,
   ListChecks,
+  FolderOpen,
+  Receipt,
   LogIn,
   Truck,
   Car,
@@ -59,6 +61,9 @@ const navItems: NavItem[] = [
     children: [
       { label: 'Clock In / Out', icon: <LogIn className="w-4 h-4" />, path: '/hrm/clock-in-out' },
       { label: 'My Tasks', icon: <ListChecks className="w-4 h-4" />, path: '/my-space/tasks' },
+      { label: 'My Assets', icon: <FolderOpen className="w-4 h-4" />, path: '/my-space/assets' },
+      { label: 'My Leaves', icon: <CalendarOff className="w-4 h-4" />, path: '/my-space/leaves' },
+      { label: 'My Payslips', icon: <Receipt className="w-4 h-4" />, path: '/my-space/payslips' },
     ],
   },
   {

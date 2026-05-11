@@ -12,6 +12,16 @@ export default defineConfig({
         secure: true,
         cookieDomainRewrite: 'localhost',
       },
+      '/files': {
+        target: 'https://oceanfleet.aprilsea.com',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/private': {
+        target: 'https://oceanfleet.aprilsea.com',
+        changeOrigin: true,
+        secure: true,
+      },
     },
   },
 })

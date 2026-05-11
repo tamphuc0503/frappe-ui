@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useState } from 'react'
+import { useFetchOnce } from '../../hooks/useFetchOnce'
 import { Plus, MoreHorizontal, Calendar, FolderKanban, AlertTriangle, RefreshCw } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
@@ -102,9 +103,7 @@ export function MyTasks() {
     }
   }
 
-  useEffect(() => {
-    void load(false)
-  }, [])
+  useFetchOnce(() => { void load(false) })
 
   if (pageLoading || loading) return <MyTasksSkeleton />
 

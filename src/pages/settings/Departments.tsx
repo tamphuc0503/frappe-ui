@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useFetchOnce } from '../../hooks/useFetchOnce'
 import { Plus, X, Loader2, Building2 } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { usePageLoad } from '../../hooks/usePageLoad'
@@ -149,9 +150,9 @@ export function Departments() {
     }
   }, [])
 
-  useEffect(() => {
+  useFetchOnce(() => {
     refresh().finally(() => setFetchLoading(false))
-  }, [refresh])
+  })
 
   const loading = pageLoading || fetchLoading
   if (loading) return <><SkPageHeader /><SkTable rows={6} cols={1} hasToolbar={false} /></>

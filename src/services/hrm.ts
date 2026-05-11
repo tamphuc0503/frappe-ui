@@ -101,6 +101,28 @@ export async function getGenders(): Promise<LookupOption[]> {
   return toLookupOptions(data.message, 'gender')
 }
 
+// Resolve the current logged-in user's Employee primary key by matching
+// Employee.user_id to the cached user email. Returns null if the user is not
+// linked to any Employee — callers should treat that as "no records".
+export async function getMyEmployeeId(): Promise<string | null> {
+  const cached = getUserCache()
+  if (!cached) {
+    throw new Error('Not authenticated. Please log out and back in.')
+  }
+  const params = new URLSearchParams({
+    doctype: 'Employee',
+    fields: JSON.stringify(['name']),
+    filters: JSON.stringify([['user_id', '=', cached.email]]),
+    limit_page_length: '1',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<{ name: string }>
+  if (!res.ok || data.exc) {
+    throw new Error(data.exc ?? 'Failed to find your employee record.')
+  }
+  return data.message?.[0]?.name ?? null
+}
+
 export async function getEmployees(): Promise<Employee[]> {
   const params = new URLSearchParams({
     doctype: 'Employee',

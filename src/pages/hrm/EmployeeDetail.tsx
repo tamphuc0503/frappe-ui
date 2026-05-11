@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
+import { useFetchOnce } from '../../hooks/useFetchOnce'
 import { useParams, useNavigate, useLocation, useBlocker } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, FileText, Loader2, Plus, Save, Trash2, Upload, X } from 'lucide-react'
 import { Combobox } from '../../components/ui/Combobox'
+import { FileUploader } from '../../components/ui/FileUploader'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { Sk, SkPageHeader } from '../../components/ui/Skeleton'
+import type { UploadedFile } from '../../services/files'
 import { getEmployee, updateEmployee, getDepartments, getDesignations, getGenders, type LookupOption } from '../../services/hrm'
 import type { Employee } from '../../types/hrm'
 import {
@@ -58,6 +61,20 @@ const EMPTY_CONTACTS: ContactsState = {
   emergencyContactName: '',
   emergencyPhone: '',
   emergencyRelation: '',
+}
+
+interface Identification {
+  idNumber: string
+  idValidUntil: string
+  idFront: UploadedFile | null
+  idBack: UploadedFile | null
+}
+
+const EMPTY_IDENTIFICATION: Identification = {
+  idNumber: '',
+  idValidUntil: '',
+  idFront: null,
+  idBack: null,
 }
 
 interface Dependant {
@@ -193,9 +210,13 @@ export function EmployeeDetail() {
 
   // Tab-specific state — in-memory only
   const [joining, setJoining] = useState<JoiningDetails>(EMPTY_JOINING)
+  const [identification, setIdentification] = useState<Identification>(EMPTY_IDENTIFICATION)
   const [contacts, setContacts] = useState<ContactsState>(EMPTY_CONTACTS)
   const [addressOpen, setAddressOpen] = useState(true)
   const [dependantsOpen, setDependantsOpen] = useState(true)
+  const [identificationOpen, setIdentificationOpen] = useState(true)
+  const [joiningOpen, setJoiningOpen] = useState(true)
+  const [healthOpen, setHealthOpen] = useState(true)
   const [dependants, setDependants] = useState<Dependant[]>([])
   const [certificates, setCertificates] = useState<Certificate[]>([])
   const [selectedCerts, setSelectedCerts] = useState<Set<string>>(new Set())
@@ -214,25 +235,20 @@ export function EmployeeDetail() {
   useEffect(() => () => { mountedRef.current = false }, [])
 
   // Fetch employee record only.
-  useEffect(() => {
+  useFetchOnce(() => {
     if (!id) return
-    let alive = true
     setFetchLoading(true)
     getEmployee(id)
       .then((emp) => {
-        if (!alive) return
         setEmployee(emp)
         const snapshot = fromEmployee(emp)
         setForm(snapshot)
         setPristine(snapshot)
         setFetchError(null)
       })
-      .catch((err) => {
-        if (alive) setFetchError(err instanceof Error ? err.message : 'Failed to load employee.')
-      })
-      .finally(() => { if (alive) setFetchLoading(false) })
-    return () => { alive = false }
-  }, [id])
+      .catch((err) => setFetchError(err instanceof Error ? err.message : 'Failed to load employee.'))
+      .finally(() => setFetchLoading(false))
+  }, id)
 
   function loadDepartments() {
     if (startedDeptRef.current) return
@@ -280,6 +296,10 @@ export function EmployeeDetail() {
 
   function setJoiningField<K extends keyof JoiningDetails>(field: K, value: JoiningDetails[K]) {
     setJoining((prev) => ({ ...prev, [field]: value }))
+  }
+
+  function setIdentificationField<K extends keyof Identification>(field: K, value: Identification[K]) {
+    setIdentification((prev) => ({ ...prev, [field]: value }))
   }
 
   function setContactField<K extends keyof ContactsState>(field: K, value: ContactsState[K]) {
@@ -515,15 +535,64 @@ export function EmployeeDetail() {
                 onChange={set}
                 onShakeEnd={stopShake}
                 options={dropdownOptions}
-                emailReadOnly
+                hideEmail
               />
             )}
 
             {/* Details */}
             {tab === 'details' && (
-              <div className="space-y-5">
-                <section>
-                  <h3 className="font-semibold text-gray-900 text-sm mb-3">Joining Information</h3>
+              <div className="space-y-4">
+                <Collapsible
+                  title="Identification"
+                  open={identificationOpen}
+                  onToggle={() => setIdentificationOpen((o) => !o)}
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">ID Number</label>
+                      <input
+                        type="number"
+                        value={identification.idNumber}
+                        onChange={(e) => setIdentificationField('idNumber', e.target.value)}
+                        className="form-input"
+                        placeholder="e.g. 123456789"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">ID Valid Until</label>
+                      <input
+                        type="date"
+                        value={identification.idValidUntil}
+                        onChange={(e) => setIdentificationField('idValidUntil', e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">ID Front</label>
+                      <FileUploader
+                        value={identification.idFront}
+                        onChange={(f) => setIdentificationField('idFront', f)}
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        label="Drop ID front here or click to browse"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">ID Back</label>
+                      <FileUploader
+                        value={identification.idBack}
+                        onChange={(f) => setIdentificationField('idBack', f)}
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        label="Drop ID back here or click to browse"
+                      />
+                    </div>
+                  </div>
+                </Collapsible>
+
+                <Collapsible
+                  title="Joining Information"
+                  open={joiningOpen}
+                  onToggle={() => setJoiningOpen((o) => !o)}
+                >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1.5">Job Applicant</label>
@@ -574,10 +643,13 @@ export function EmployeeDetail() {
                       />
                     </div>
                   </div>
-                </section>
+                </Collapsible>
 
-                <section>
-                  <h3 className="font-semibold text-gray-900 text-sm mb-3">Health Insurance</h3>
+                <Collapsible
+                  title="Health Insurance"
+                  open={healthOpen}
+                  onToggle={() => setHealthOpen((o) => !o)}
+                >
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">Health Insurance Provider</label>
                     <Combobox
@@ -588,7 +660,7 @@ export function EmployeeDetail() {
                       placeholder="Select a provider"
                     />
                   </div>
-                </section>
+                </Collapsible>
               </div>
             )}
 

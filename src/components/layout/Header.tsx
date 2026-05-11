@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bell, LogOut, ChevronDown } from 'lucide-react'
+import { Bell, LogOut, ChevronDown, UserCircle } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
 
@@ -115,11 +115,30 @@ export function Header({ sidebarCollapsed }: HeaderProps) {
           </button>
 
           {showUserMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden py-1">
-              <div className="px-4 py-2.5 border-b border-gray-100">
-                <p className="text-sm font-semibold text-gray-900">{user?.name}</p>
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden py-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUserMenu(false)
+                  navigate('/my-space/profile')
+                }}
+                className="w-full text-left px-4 py-2.5 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                title="View profile"
+              >
+                <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
                 <p className="text-xs text-gray-400 truncate">{user?.email}</p>
-              </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUserMenu(false)
+                  navigate('/my-space/profile')
+                }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <UserCircle className="w-4 h-4" />
+                View Profile
+              </button>
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
