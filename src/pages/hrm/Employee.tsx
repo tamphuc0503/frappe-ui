@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useFetchOnce } from '../../hooks/useFetchOnce'
 import { useNavigate } from 'react-router-dom'
-import { Search, Plus, Pencil, Filter, X, Loader2, RefreshCw, MoreVertical, CalendarPlus } from 'lucide-react'
+import { Search, Plus, Pencil, Filter, X, Loader2, RefreshCw, MoreVertical, CalendarPlus, UserMinus } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
-import { getEmployees, createEmployee, getDepartments, getDesignations, getGenders, type LookupOption } from '../../services/hrm'
+import { getEmployees, createEmployee, createResignation, getDepartments, getDesignations, getGenders, type LookupOption } from '../../services/hrm'
 import type { Employee } from '../../types/hrm'
 import { LeaveRequestDialog } from '../../components/ui/LeaveRequestDialog'
 import {
@@ -183,6 +183,7 @@ export function Employee() {
   const [search, setSearch] = useState('')
   const [showDialog, setShowDialog] = useState(false)
   const [leaveTargetEmp, setLeaveTargetEmp] = useState<string | null>(null)
+  const [resignTargetEmp, setResignTargetEmp] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -399,6 +400,13 @@ export function Employee() {
                             <CalendarPlus className="w-4 h-4 text-gray-400" />
                             Make Leave Request
                           </button>
+                          <button
+                            onClick={() => { setResignTargetEmp(emp.id); setOpenMenuId(null) }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <UserMinus className="w-4 h-4 text-red-400" />
+                            Resign
+                          </button>
                         </div>
                       )}
                     </div>
@@ -444,6 +452,174 @@ export function Employee() {
           onSubmit={() => setLeaveTargetEmp(null)}
         />
       )}
+
+      {resignTargetEmp && (
+        <ResignationDialog
+          employeeId={resignTargetEmp}
+          onClose={() => setResignTargetEmp(null)}
+          onSubmitted={() => { setResignTargetEmp(null); refreshEmployees() }}
+        />
+      )}
     </div>
+  )
+}
+
+// ─── Resignation Dialog ────────────────────────────────────────────────────────
+interface ResignationDialogProps {
+  employeeId: string
+  onClose: () => void
+  onSubmitted: () => void
+}
+
+function ResignationDialog({ employeeId, onClose, onSubmitted }: ResignationDialogProps) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [letterDate, setLetterDate] = useState(today)
+  const [boardingDate, setBoardingDate] = useState(today)
+  const [reason, setReason] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [errorShaking, setErrorShaking] = useState(false)
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !submitting) onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose, submitting])
+
+  async function handleSubmit() {
+    if (!reason.trim()) {
+      setSubmitError('Please provide a reason for resignation.')
+      setErrorShaking(true)
+      return
+    }
+    setSubmitError(null)
+    setSubmitting(true)
+    try {
+      await createResignation({
+        employee: employeeId,
+        resignationLetterDate: letterDate,
+        boardingBegins: boardingDate,
+        reason: reason.trim(),
+      })
+      onSubmitted()
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to submit resignation.')
+      setErrorShaking(true)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 backdrop-enter"
+        onClick={submitting ? undefined : onClose}
+      />
+      <div className="fixed inset-x-0 top-0 z-50 flex justify-center pointer-events-none">
+        <div
+          className="bg-white rounded-b-2xl shadow-2xl w-full max-w-lg max-h-[90svh] flex flex-col overflow-hidden pointer-events-auto dialog-enter"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 flex-shrink-0">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Resignation Letter</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Submit a resignation for employee <span className="font-medium text-gray-700">{employeeId}</span></p>
+            </div>
+            <button
+              onClick={onClose}
+              disabled={submitting}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="res-letter-date" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Resignation Letter Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="res-letter-date"
+                  type="date"
+                  value={letterDate}
+                  onChange={(e) => { setLetterDate(e.target.value); setSubmitError(null) }}
+                  className="form-input w-full"
+                />
+              </div>
+              <div>
+                <label htmlFor="res-boarding-date" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Boarding Begins On <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="res-boarding-date"
+                  type="date"
+                  value={boardingDate}
+                  onChange={(e) => { setBoardingDate(e.target.value); setSubmitError(null) }}
+                  className="form-input w-full"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="res-reason" className="block text-sm font-medium text-gray-700 mb-1.5">
+                Reason for Resignation <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                id="res-reason"
+                rows={4}
+                value={reason}
+                onChange={(e) => { setReason(e.target.value); setSubmitError(null) }}
+                placeholder="Please provide the reason for resignation..."
+                className="form-input w-full resize-none"
+              />
+            </div>
+
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${submitError ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>
+              <div
+                className={`p-3 bg-red-50 border border-red-200 rounded-lg ${errorShaking ? 'field-shake' : ''}`}
+                onAnimationEnd={() => setErrorShaking(false)}
+              >
+                <span className="text-red-600 text-sm">{submitError}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl flex-shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="btn-danger min-w-[140px]"
+            >
+              {submitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Submitting…
+                </span>
+              ) : (
+                'Submit Resignation'
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   )
 }

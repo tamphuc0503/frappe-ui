@@ -27,6 +27,7 @@ import { MyAssets } from './pages/myspace/MyAssets'
 import { MyLeaves } from './pages/myspace/MyLeaves'
 import { Payslips as MyPayslips } from './pages/myspace/Payslips'
 import { Profile } from './pages/myspace/Profile'
+import { RequestNewMember } from './pages/myspace/RequestNewMember'
 
 import { Vehicles } from './pages/fleet/Vehicles'
 import { Drivers } from './pages/fleet/Drivers'
@@ -82,6 +83,7 @@ const router = createBrowserRouter(
         <Route path="/my-space/leaves" element={<MyLeaves />} />
         <Route path="/my-space/payslips" element={<MyPayslips />} />
         <Route path="/my-space/profile" element={<Profile />} />
+        <Route path="/my-space/request-new-member" element={<RequestNewMember />} />
 
         <Route path="/fleet/vehicles" element={<Vehicles />} />
         <Route path="/fleet/drivers" element={<Drivers />} />

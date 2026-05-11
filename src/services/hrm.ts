@@ -230,3 +230,39 @@ export async function createDepartment(name: string): Promise<void> {
     throw new Error(data.exc ?? data._server_messages ?? 'Failed to create department.')
   }
 }
+
+export interface ResignationInput {
+  employee: string
+  resignationLetterDate: string
+  boardingBegins: string
+  reason: string
+}
+
+export async function createResignation(input: ResignationInput): Promise<void> {
+  const doc = {
+    doctype: 'Employee Separation',
+    employee: input.employee,
+    resignation_letter_date: input.resignationLetterDate,
+    boarding_begins_on: input.boardingBegins,
+    reason_for_resignation: input.reason,
+  }
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.insert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ doc }),
+  })
+  const data = (await res.json()) as InsertResponse
+  if (!res.ok || data.exc) {
+    let msg = 'Failed to submit resignation.'
+    const serverMsg = data._server_messages
+    if (serverMsg) {
+      try {
+        const parsed = JSON.parse(serverMsg) as string | string[]
+        const first = Array.isArray(parsed) ? parsed[0] : parsed
+        const inner = JSON.parse(first) as { message?: string }
+        if (inner.message) msg = inner.message
+      } catch { /* use default */ }
+    }
+    throw new Error(msg)
+  }
+}
