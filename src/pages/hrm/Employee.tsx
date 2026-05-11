@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useFetchOnce } from '../../hooks/useFetchOnce'
 import { useNavigate } from 'react-router-dom'
-import { Search, Plus, Eye, Pencil, Filter, X, Loader2, RefreshCw } from 'lucide-react'
+import { Search, Plus, Pencil, Filter, X, Loader2, RefreshCw, MoreVertical, CalendarPlus } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
 import { getEmployees, createEmployee, getDepartments, getDesignations, getGenders, type LookupOption } from '../../services/hrm'
 import type { Employee } from '../../types/hrm'
+import { LeaveRequestDialog } from '../../components/ui/LeaveRequestDialog'
 import {
   FormFields,
   EMPTY_FORM,
@@ -181,6 +182,20 @@ export function Employee() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [showDialog, setShowDialog] = useState(false)
+  const [leaveTargetEmp, setLeaveTargetEmp] = useState<string | null>(null)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!openMenuId) return
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [openMenuId])
 
   const [departments, setDepartments] = useState<LookupOption[]>([])
   const [designations, setDesignations] = useState<LookupOption[]>([])
@@ -356,14 +371,7 @@ export function Employee() {
                   <td className="table-td">{statusBadge(emp.status)}</td>
                   <td className="table-td text-gray-500">{emp.joinDate}</td>
                   <td className="table-td">
-                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => openDetail(emp.id)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="View"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
+                    <div className="relative flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => openDetail(emp.id)}
                         className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
@@ -371,6 +379,28 @@ export function Employee() {
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
+                      <button
+                        onClick={() => setOpenMenuId(openMenuId === emp.id ? null : emp.id)}
+                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="More actions"
+                        aria-label="More actions"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                      {openMenuId === emp.id && (
+                        <div
+                          ref={menuRef}
+                          className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1"
+                        >
+                          <button
+                            onClick={() => { setLeaveTargetEmp(emp.id); setOpenMenuId(null) }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            <CalendarPlus className="w-4 h-4 text-gray-400" />
+                            Make Leave Request
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -404,6 +434,14 @@ export function Employee() {
           options={dropdownOptions}
           onClose={() => setShowDialog(false)}
           onSave={handleAdd}
+        />
+      )}
+
+      {leaveTargetEmp && (
+        <LeaveRequestDialog
+          employeeId={leaveTargetEmp}
+          onClose={() => setLeaveTargetEmp(null)}
+          onSubmit={() => setLeaveTargetEmp(null)}
         />
       )}
     </div>

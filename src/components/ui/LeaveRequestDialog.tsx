@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { Combobox } from './Combobox'
-import { getLeaveTypes, type LeaveTypeOption } from '../../services/leaves'
+import { getLeaveTypes, createLeaveRequest, type LeaveTypeOption } from '../../services/leaves'
 import { useFetchOnce } from '../../hooks/useFetchOnce'
 import type { LeaveDay, LeaveDayType, LeaveRequestPayload } from '../../types/leave'
 
@@ -27,9 +27,10 @@ const TYPE_LABEL: Record<LeaveDayType, string> = { full: 'All day', half: 'Half 
 interface LeaveRequestDialogProps {
   onClose: () => void
   onSubmit: (payload: LeaveRequestPayload) => void
+  employeeId?: string
 }
 
-export function LeaveRequestDialog({ onClose, onSubmit }: LeaveRequestDialogProps) {
+export function LeaveRequestDialog({ onClose, onSubmit, employeeId }: LeaveRequestDialogProps) {
   const today = new Date()
   const [month, setMonth] = useState<Date>(new Date(today.getFullYear(), today.getMonth(), 1))
   const [dates, setDates] = useState<Map<string, LeaveDay>>(new Map())
@@ -39,6 +40,14 @@ export function LeaveRequestDialog({ onClose, onSubmit }: LeaveRequestDialogProp
   const [typeError, setTypeError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [errorShaking, setErrorShaking] = useState(false)
+  const errorRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (submitError) {
+      setTimeout(() => errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50)
+    }
+  }, [submitError])
 
   useFetchOnce(() => {
     setLoadingTypes(true)
@@ -58,6 +67,7 @@ export function LeaveRequestDialog({ onClose, onSubmit }: LeaveRequestDialogProp
 
   function toggleDate(d: Date) {
     const key = ymd(d)
+    setSubmitError(null)
     setDates((prev) => {
       const n = new Map(prev)
       if (n.has(key)) n.delete(key)
@@ -67,6 +77,7 @@ export function LeaveRequestDialog({ onClose, onSubmit }: LeaveRequestDialogProp
   }
 
   function setDayType(key: string, type: LeaveDayType) {
+    setSubmitError(null)
     setDates((prev) => {
       const n = new Map(prev)
       const d = n.get(key)
@@ -76,6 +87,7 @@ export function LeaveRequestDialog({ onClose, onSubmit }: LeaveRequestDialogProp
   }
 
   function setDayTime(key: string, field: 'fromTime' | 'endTime', value: string) {
+    setSubmitError(null)
     setDates((prev) => {
       const n = new Map(prev)
       const d = n.get(key)
@@ -85,6 +97,7 @@ export function LeaveRequestDialog({ onClose, onSubmit }: LeaveRequestDialogProp
   }
 
   function removeDate(key: string) {
+    setSubmitError(null)
     setDates((prev) => {
       const n = new Map(prev)
       n.delete(key)
@@ -104,21 +117,27 @@ export function LeaveRequestDialog({ onClose, onSubmit }: LeaveRequestDialogProp
   async function handleSubmit() {
     if (!leaveType) {
       setSubmitError('Pick a leave type.')
+      setErrorShaking(true)
       return
     }
     if (dates.size === 0) {
       setSubmitError('Pick at least one date.')
+      setErrorShaking(true)
       return
     }
     setSubmitError(null)
     setSubmitting(true)
     try {
       const ordered = Array.from(dates.entries())
-        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, day]) => ({ date, day }))
-      await new Promise((r) => setTimeout(r, 400))
-      onSubmit({ leaveType, days: ordered })
+      const payload: LeaveRequestPayload = { leaveType, days: ordered }
+      await createLeaveRequest(payload, employeeId)
+      onSubmit(payload)
       onClose()
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to submit leave request.')
+      setErrorShaking(true)
     } finally {
       setSubmitting(false)
     }
@@ -154,19 +173,21 @@ export function LeaveRequestDialog({ onClose, onSubmit }: LeaveRequestDialogProp
           {/* Body — scrolls */}
           <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 space-y-5">
             {/* Leave type */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
                 Leave Type <span className="text-red-500">*</span>
               </label>
+              <div className="flex-1">
               <Combobox
                 options={leaveTypes}
                 value={leaveType ? [leaveType] : []}
-                onChange={(vs) => setLeaveType(vs[0] ?? '')}
+                onChange={(vs) => { setLeaveType(vs[0] ?? ''); setSubmitError(null) }}
                 max={1}
                 placeholder="Select a leave type"
                 loading={loadingTypes}
               />
               {typeError && <p className="text-xs text-red-500 mt-1">{typeError}</p>}
+              </div>
             </div>
 
             {/* Calendar */}
@@ -290,11 +311,14 @@ export function LeaveRequestDialog({ onClose, onSubmit }: LeaveRequestDialogProp
               )}
             </div>
 
-            {submitError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div ref={errorRef} className={`overflow-hidden transition-all duration-300 ease-in-out ${submitError ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>
+              <div
+                className={`p-3 bg-red-50 border border-red-200 rounded-lg ${errorShaking ? 'field-shake' : ''}`}
+                onAnimationEnd={() => setErrorShaking(false)}
+              >
                 <span className="text-red-600 text-sm">{submitError}</span>
               </div>
-            )}
+            </div>
           </div>
 
           {/* Footer — pinned */}

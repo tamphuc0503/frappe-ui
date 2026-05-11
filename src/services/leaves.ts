@@ -1,7 +1,7 @@
 import { http, FRAPPE_BASE } from './http'
 import { getMyEmployeeId } from './hrm'
-import type { MyLeave, LeaveSummary, LeaveBalance, Holiday } from '../types/leave'
-import { leaveApplicationCodec, type FrappeLeaveApplication } from '../transformers/leaveApplication'
+import type { MyLeave, LeaveSummary, LeaveBalance, Holiday, LeaveRequestPayload, LeaveListItem } from '../types/leave'
+import { leaveApplicationCodec, decodeLeaveListItem, type FrappeLeaveApplication, type FrappeLeaveListItem } from '../transformers/leaveApplication'
 
 interface GetListResponse<T> {
   message?: T[]
@@ -31,6 +31,88 @@ export async function getLeaveTypes(): Promise<LeaveTypeOption[]> {
     throw new Error(data.exc ?? 'Failed to fetch leave types.')
   }
   return (data.message ?? []).map((r) => ({ value: r.name, label: r.name }))
+}
+
+interface InsertResponse {
+  message?: unknown
+  exc?: string
+  _server_messages?: string
+}
+
+export async function createLeaveRequest(payload: LeaveRequestPayload, employeeId?: string): Promise<void> {
+  const empId = employeeId ?? await getMyEmployeeId()
+  if (!empId) throw new Error('No linked employee record found.')
+  const sorted = payload.days.map((d) => d.date).sort((a, b) => a.localeCompare(b))
+  const fromDate = sorted[0]
+  const toDate = sorted.at(-1)!
+  const isHalfDay = payload.days.length === 1 && payload.days[0].day.type === 'half'
+  const description = payload.days
+    .filter((d) => d.day.type === 'half' || d.day.type === 'custom')
+    .map((d) => {
+      if (d.day.type === 'half') return `${d.date}: Half day`
+      return `${d.date}: ${d.day.fromTime}–${d.day.endTime}`
+    })
+    .join('\n')
+
+  const doc: Record<string, unknown> = {
+    doctype: 'Leave Application',
+    employee: empId,
+    leave_type: payload.leaveType,
+    from_date: fromDate,
+    to_date: toDate,
+    status: 'Open',
+    half_day: isHalfDay ? 1 : 0,
+    ...(isHalfDay ? { half_day_date: fromDate } : {}),
+    ...(description ? { description } : {}),
+  }
+
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.insert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ doc }),
+  })
+  const data = (await res.json()) as InsertResponse
+  if (!res.ok || data.exc) {
+    const serverMsg = data._server_messages
+    let msg = 'Failed to create leave request.'
+    if (serverMsg) {
+      try {
+        const parsed = JSON.parse(serverMsg) as string | string[]
+        const first = Array.isArray(parsed) ? parsed[0] : parsed
+        const inner = JSON.parse(first) as { message?: string }
+        if (inner.message) msg = inner.message
+      } catch { /* use default */ }
+    }
+    throw new Error(msg)
+  }
+}
+
+export async function getAllLeaves(): Promise<LeaveListItem[]> {
+  const params = new URLSearchParams({
+    doctype: 'Leave Application',
+    fields: JSON.stringify([
+      'name',
+      'employee',
+      'employee_name',
+      'department',
+      'leave_type',
+      'from_date',
+      'to_date',
+      'total_leave_days',
+      'status',
+      'description',
+      'posting_date',
+      'half_day',
+    ]),
+    limit_page_length: '0',
+    order_by: 'posting_date desc',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<FrappeLeaveListItem>
+  if (!res.ok || data.exc) {
+    throw new Error(data.exc ?? 'Failed to fetch leave requests.')
+  }
+  return (data.message ?? []).map(decodeLeaveListItem)
 }
 
 export async function getMyLeaves(): Promise<MyLeave[]> {

@@ -104,7 +104,17 @@ export async function getGenders(): Promise<LookupOption[]> {
 // Resolve the current logged-in user's Employee primary key by matching
 // Employee.user_id to the cached user email. Returns null if the user is not
 // linked to any Employee — callers should treat that as "no records".
+// Cached in-memory so parallel callers (leaves, summary, holidays) share one request.
+let _empIdPromise: Promise<string | null> | null = null
+
 export async function getMyEmployeeId(): Promise<string | null> {
+  if (_empIdPromise) return _empIdPromise
+  _empIdPromise = _fetchMyEmployeeId()
+  _empIdPromise.catch(() => { _empIdPromise = null })
+  return _empIdPromise
+}
+
+async function _fetchMyEmployeeId(): Promise<string | null> {
   const cached = getUserCache()
   if (!cached) {
     throw new Error('Not authenticated. Please log out and back in.')

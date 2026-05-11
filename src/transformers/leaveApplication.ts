@@ -1,4 +1,4 @@
-import type { MyLeave, LeaveApplicationStatus } from '../types/leave'
+import type { MyLeave, LeaveApplicationStatus, LeaveListItem } from '../types/leave'
 import type { Codec } from './codec'
 
 export interface FrappeLeaveApplication {
@@ -13,6 +13,11 @@ export interface FrappeLeaveApplication {
   posting_date?: string
   half_day?: number
   half_day_date?: string
+}
+
+export interface FrappeLeaveListItem extends FrappeLeaveApplication {
+  employee_name?: string
+  department?: string
 }
 
 const STATUS_VALUES: LeaveApplicationStatus[] = ['Open', 'Approved', 'Rejected', 'Cancelled']
@@ -50,4 +55,21 @@ export const leaveApplicationCodec: Codec<MyLeave, FrappeLeaveApplication> = {
       half_day_date: m.halfDayDate || undefined,
     }
   },
+}
+
+export function decodeLeaveListItem(f: FrappeLeaveListItem): LeaveListItem {
+  return {
+    id: f.name,
+    employeeId: f.employee ?? '',
+    employeeName: f.employee_name ?? '',
+    department: f.department ?? '',
+    leaveType: f.leave_type ?? '',
+    fromDate: f.from_date ?? '',
+    toDate: f.to_date ?? '',
+    totalDays: typeof f.total_leave_days === 'number' ? f.total_leave_days : 0,
+    status: decodeStatus(f.status),
+    description: f.description ?? '',
+    postingDate: f.posting_date ?? '',
+    halfDay: f.half_day === 1,
+  }
 }

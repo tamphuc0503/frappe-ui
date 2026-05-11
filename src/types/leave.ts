@@ -1,5 +1,20 @@
 export type LeaveApplicationStatus = 'Open' | 'Approved' | 'Rejected' | 'Cancelled'
 
+export interface LeaveListItem {
+  id: string
+  employeeId: string
+  employeeName: string
+  department: string
+  leaveType: string
+  fromDate: string
+  toDate: string
+  totalDays: number
+  status: LeaveApplicationStatus
+  description: string
+  postingDate: string
+  halfDay: boolean
+}
+
 export interface MyLeave {
   id: string
   leaveType: string
