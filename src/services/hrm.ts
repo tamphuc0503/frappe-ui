@@ -1,6 +1,7 @@
 import { http, FRAPPE_BASE } from './http'
 import { getCompanyCache } from './company'
 import { getUserCache } from './auth'
+import { createUser } from './users'
 import type { Employee } from '../types/hrm'
 import {
   employeeCodec,
@@ -27,46 +28,77 @@ interface InsertResponse<T = unknown> {
   _server_messages?: string
 }
 
-export async function getDepartments(): Promise<string[]> {
+export interface LookupOption {
+  value: string
+  label: string
+  id?: string
+}
+
+// Frappe's get_list returns rows like `{name: <key>, <display_field>: <label>}`.
+// `name` is the doctype's primary key (what we send back to Frappe in link
+// fields); the display field is what we show to the user. They are not always
+// the same — e.g. Department has `name='HR-001'`, `department_name='Human Resources'`.
+function toLookupOptions(rows: unknown, labelKey: string): LookupOption[] {
+  if (!Array.isArray(rows)) return []
+  const out: LookupOption[] = []
+  for (const r of rows) {
+    if (typeof r === 'string' && r.length > 0) {
+      out.push({ value: r, label: r })
+      continue
+    }
+    if (r && typeof r === 'object') {
+      const obj = r as Record<string, unknown>
+      const key = typeof obj.name === 'string' ? obj.name : ''
+      const lbl = typeof obj[labelKey] === 'string' && (obj[labelKey] as string).length > 0
+        ? (obj[labelKey] as string)
+        : key
+      const id = typeof obj.id === 'string' && obj.id.length > 0 ? obj.id : undefined
+      if (key) out.push({ value: key, label: lbl, id })
+    }
+  }
+  return out
+}
+
+export async function getDepartments(): Promise<LookupOption[]> {
   const params = new URLSearchParams({
     doctype: 'Department',
-    fields: JSON.stringify(['name']),
+    fields: JSON.stringify(['id', 'name', 'department_name']),
     limit_page_length: '0',
   })
   const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
   const data = (await res.json()) as GetListResponse<FrappeDepartment>
-  if (!res.ok) {
+  if (!res.ok || data.exc) {
     throw new Error(data.exc ?? 'Failed to fetch departments.')
   }
-  return (data.message ?? []).map((d) => d.name)
+  return toLookupOptions(data.message, 'department_name')
 }
 
-export async function getDesignations(): Promise<string[]> {
+export async function getDesignations(): Promise<LookupOption[]> {
   const params = new URLSearchParams({
     doctype: 'Designation',
-    fields: JSON.stringify(['name']),
+    fields: JSON.stringify(['name', 'designation_name']),
     limit_page_length: '0',
   })
   const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
   const data = (await res.json()) as GetListResponse<{ name: string }>
-  if (!res.ok) {
+  if (!res.ok || data.exc) {
     throw new Error(data.exc ?? 'Failed to fetch designations.')
   }
-  return (data.message ?? []).map((d) => d.name)
+  return toLookupOptions(data.message, 'designation_name')
 }
 
-export async function getGenders(): Promise<string[]> {
+export async function getGenders(): Promise<LookupOption[]> {
   const params = new URLSearchParams({
     doctype: 'Gender',
-    fields: JSON.stringify(['name']),
+    fields: JSON.stringify(['name', 'gender']),
     limit_page_length: '0',
   })
   const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
   const data = (await res.json()) as GetListResponse<{ name: string }>
-  if (!res.ok) {
+  if (!res.ok || data.exc) {
     throw new Error(data.exc ?? 'Failed to fetch genders.')
   }
-  return (data.message ?? []).map((g) => g.name)
+  return toLookupOptions(data.message, 'gender')
 }
 
 export async function getEmployees(): Promise<Employee[]> {
@@ -122,7 +154,8 @@ export async function updateEmployee(id: string, input: CreateEmployeeInput): Pr
 }
 
 export async function createEmployee(input: CreateEmployeeInput): Promise<Employee> {
-  const doc = toFrappeEmployeeDoc(input)
+  const userId = await createUser(input.email, input.name)
+  const doc = toFrappeEmployeeDoc(input, userId)
   const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.insert`, {
     method: 'POST',
     headers: {

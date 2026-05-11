@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Plus, Eye, Pencil, Filter, X, Loader2 } from 'lucide-react'
+import { Search, Plus, Eye, Pencil, Filter, X, Loader2, RefreshCw } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
-import { getEmployees, createEmployee, getDepartments, getDesignations, getGenders } from '../../services/hrm'
+import { getEmployees, createEmployee, getDepartments, getDesignations, getGenders, type LookupOption } from '../../services/hrm'
 import type { Employee } from '../../types/hrm'
 import {
   FormFields,
@@ -176,16 +176,22 @@ export function Employee() {
   const pageLoading = usePageLoad()
   const [employeeList, setEmployeeList] = useState<Employee[]>([])
   const [fetchLoading, setFetchLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [showDialog, setShowDialog] = useState(false)
 
-  const [departments, setDepartments] = useState<string[]>([])
-  const [designations, setDesignations] = useState<string[]>([])
-  const [genders, setGenders] = useState<string[]>([])
-  const [loadingDepartments, setLoadingDepartments] = useState(true)
-  const [loadingDesignations, setLoadingDesignations] = useState(true)
-  const [loadingGenders, setLoadingGenders] = useState(true)
+  const [departments, setDepartments] = useState<LookupOption[]>([])
+  const [designations, setDesignations] = useState<LookupOption[]>([])
+  const [genders, setGenders] = useState<LookupOption[]>([])
+  const [loadingDepartments, setLoadingDepartments] = useState(false)
+  const [loadingDesignations, setLoadingDesignations] = useState(false)
+  const [loadingGenders, setLoadingGenders] = useState(false)
+  const startedDeptRef = useRef(false)
+  const startedDesigRef = useRef(false)
+  const startedGenderRef = useRef(false)
+  const mountedRef = useRef(true)
+  useEffect(() => () => { mountedRef.current = false }, [])
 
   useEffect(() => {
     let alive = true
@@ -193,24 +199,63 @@ export function Employee() {
       .then((data) => { if (alive) { setEmployeeList(data); setError(null) } })
       .catch((err) => { if (alive) setError(err instanceof Error ? err.message : 'Failed to load employees.') })
       .finally(() => { if (alive) setFetchLoading(false) })
-    getDepartments()
-      .then((data) => { if (alive) setDepartments(data) })
-      .catch(() => { /* leave empty; surface on submit */ })
-      .finally(() => { if (alive) setLoadingDepartments(false) })
-    getDesignations()
-      .then((data) => { if (alive) setDesignations(data) })
-      .catch(() => { /* leave empty; surface on submit */ })
-      .finally(() => { if (alive) setLoadingDesignations(false) })
-    getGenders()
-      .then((data) => { if (alive) setGenders(data) })
-      .catch(() => { /* leave empty; surface on submit */ })
-      .finally(() => { if (alive) setLoadingGenders(false) })
     return () => { alive = false }
   }, [])
+
+  function refreshEmployees() {
+    if (refreshing) return
+    setRefreshing(true)
+    getEmployees()
+      .then((data) => { if (mountedRef.current) { setEmployeeList(data); setError(null) } })
+      .catch((err) => { if (mountedRef.current) setError(err instanceof Error ? err.message : 'Failed to load employees.') })
+      .finally(() => { if (mountedRef.current) setRefreshing(false) })
+  }
+
+  function loadDepartments() {
+    if (startedDeptRef.current) return
+    startedDeptRef.current = true
+    setLoadingDepartments(true)
+    getDepartments()
+      .then((data) => {
+        console.info('[Employee] getDepartments resolved:', data, 'type:', Array.isArray(data) ? `string[${data.length}]` : typeof data)
+        if (mountedRef.current) setDepartments(data)
+      })
+      .catch((err) => { console.error('[Employee] getDepartments error:', err); startedDeptRef.current = false })
+      .finally(() => { if (mountedRef.current) setLoadingDepartments(false) })
+  }
+
+  function loadDesignations() {
+    if (startedDesigRef.current) return
+    startedDesigRef.current = true
+    setLoadingDesignations(true)
+    getDesignations()
+      .then((data) => {
+        console.info('[Employee] getDesignations resolved:', data)
+        if (mountedRef.current) setDesignations(data)
+      })
+      .catch((err) => { console.error('[Employee] getDesignations error:', err); startedDesigRef.current = false })
+      .finally(() => { if (mountedRef.current) setLoadingDesignations(false) })
+  }
+
+  function loadGenders() {
+    if (startedGenderRef.current) return
+    startedGenderRef.current = true
+    setLoadingGenders(true)
+    getGenders()
+      .then((data) => {
+        console.info('[Employee] getGenders resolved:', data)
+        if (mountedRef.current) setGenders(data)
+      })
+      .catch((err) => { console.error('[Employee] getGenders error:', err); startedGenderRef.current = false })
+      .finally(() => { if (mountedRef.current) setLoadingGenders(false) })
+  }
 
   const dropdownOptions: DropdownOptions = {
     departments, designations, genders,
     loadingDepartments, loadingDesignations, loadingGenders,
+    onOpenDepartments: loadDepartments,
+    onOpenDesignations: loadDesignations,
+    onOpenGenders: loadGenders,
   }
 
   const loading = pageLoading || fetchLoading
@@ -260,6 +305,16 @@ export function Employee() {
               className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+          <button
+            type="button"
+            onClick={refreshEmployees}
+            disabled={refreshing}
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Refresh"
+            aria-label="Refresh employees"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
           <button className="btn-secondary flex items-center gap-2">
             <Filter className="w-4 h-4" />
             Filter

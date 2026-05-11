@@ -98,6 +98,7 @@ export async function frappeLogin(usr: string, pwd: string): Promise<{ fullName:
   }
 
   const sid = extractSid(res.headers)
+  console.info('[auth] login extractSid =', sid, '| document.cookie =', document.cookie, '| stored sid =', getSid())
   if (sid) setSid(sid)
 
   await generateApiKeys(usr)
@@ -109,12 +110,18 @@ export async function frappeLogin(usr: string, pwd: string): Promise<{ fullName:
 
 export async function generateApiKeys(user: string): Promise<{ apiKey: string; apiSecret: string }> {
   const url = `${FRAPPE_BASE}/api/method/frappe.core.doctype.user.user.generate_keys`
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  }
+  // Browsers strip a manual Cookie header (forbidden header name); this is honored
+  // by non-browser fetch implementations (Node/undici, SSR, tests).
+  const sid = getSid()
+  if (sid) headers.Cookie = `sid=${sid}`
+  console.info('[auth] generate_keys getSid =', sid, '| document.cookie =', document.cookie)
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
+    headers,
     credentials: 'include',
     body: JSON.stringify({ user }),
   })

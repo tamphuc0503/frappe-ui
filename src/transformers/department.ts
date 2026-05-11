@@ -1,5 +1,7 @@
 export interface FrappeDepartment {
+  id?: string
   name: string
+  department_name?: string
 }
 
 export interface CreateDepartmentInput {

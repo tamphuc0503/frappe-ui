@@ -1,8 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
 import { Check, ChevronDown, X, Loader2 } from 'lucide-react'
 
+export type ComboboxOption = string | { value: string; label: string }
+
+function valueOf(o: ComboboxOption): string {
+  return typeof o === 'string' ? o : o.value
+}
+function labelOf(o: ComboboxOption): string {
+  return typeof o === 'string' ? o : o.label
+}
+
 interface ComboboxProps {
-  options: string[]
+  options: ComboboxOption[]
   value: string[]
   onChange: (value: string[]) => void
   max?: number
@@ -12,6 +21,7 @@ interface ComboboxProps {
   error?: boolean
   clearable?: boolean
   size?: 'sm' | 'md'
+  onOpen?: () => void
 }
 
 export function Combobox({
@@ -25,12 +35,19 @@ export function Combobox({
   error = false,
   clearable = true,
   size = 'md',
+  onOpen,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const onOpenRef = useRef(onOpen)
+  useEffect(() => { onOpenRef.current = onOpen })
+
+  useEffect(() => {
+    if (open) onOpenRef.current?.()
+  }, [open])
 
   useEffect(() => {
     function onPointerDown(e: PointerEvent) {
@@ -47,23 +64,30 @@ export function Combobox({
     setHighlight(0)
   }, [query, open])
 
-  const filtered = options.filter(
-    (o) => o.toLowerCase().includes(query.toLowerCase()) && !value.includes(o),
-  )
+  const filtered = options.filter((o) => {
+    const lbl = labelOf(o)
+    return lbl.toLowerCase().includes(query.toLowerCase()) && !value.includes(valueOf(o))
+  })
 
-  function pickOption(opt: string) {
-    if (value.includes(opt)) {
-      onChange(value.filter((v) => v !== opt))
+  function labelForValue(v: string): string {
+    const found = options.find((o) => valueOf(o) === v)
+    return found ? labelOf(found) : v
+  }
+
+  function pickOption(opt: ComboboxOption) {
+    const v = valueOf(opt)
+    if (value.includes(v)) {
+      onChange(value.filter((x) => x !== v))
       return
     }
     if (max === 1) {
-      onChange([opt])
+      onChange([v])
       setOpen(false)
       setQuery('')
       return
     }
     if (value.length >= max) return
-    onChange([...value, opt])
+    onChange([...value, v])
     setQuery('')
   }
 
@@ -122,25 +146,28 @@ export function Combobox({
           sizeClass,
         ].join(' ')}
       >
-        {value.map((v) => (
-          <span
-            key={v}
-            className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-blue-50 text-blue-700 rounded-md text-xs font-medium min-w-0 max-w-full"
-          >
-            <span className="truncate">{v}</span>
-            {!disabled && (
-              <button
-                type="button"
-                data-cb-stop
-                onClick={(e) => removeChip(v, e)}
-                className="hover:bg-blue-100 rounded p-0.5 flex-shrink-0"
-                aria-label={`Remove ${v}`}
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
-          </span>
-        ))}
+        {value.map((v) => {
+          const lbl = labelForValue(v)
+          return (
+            <span
+              key={v}
+              className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-blue-50 text-blue-700 rounded-md text-xs font-medium min-w-0 max-w-full"
+            >
+              <span className="truncate">{lbl}</span>
+              {!disabled && (
+                <button
+                  type="button"
+                  data-cb-stop
+                  onClick={(e) => removeChip(v, e)}
+                  className="hover:bg-blue-100 rounded p-0.5 flex-shrink-0"
+                  aria-label={`Remove ${lbl}`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </span>
+          )
+        })}
         <input
           ref={inputRef}
           type="text"
@@ -198,23 +225,26 @@ export function Combobox({
                     : 'No options'}
             </div>
           ) : (
-            filtered.map((opt, i) => (
-              <button
-                key={opt}
-                type="button"
-                onMouseEnter={() => setHighlight(i)}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  pickOption(opt)
-                }}
-                className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between transition-colors ${
-                  i === highlight ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <span>{opt}</span>
-                {value.includes(opt) && <Check className="w-4 h-4 text-blue-600" />}
-              </button>
-            ))
+            filtered.map((opt, i) => {
+              const v = valueOf(opt)
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  onMouseEnter={() => setHighlight(i)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    pickOption(opt)
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between transition-colors ${
+                    i === highlight ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>{labelOf(opt)}</span>
+                  {value.includes(v) && <Check className="w-4 h-4 text-blue-600" />}
+                </button>
+              )
+            })
           )}
         </div>
       )}

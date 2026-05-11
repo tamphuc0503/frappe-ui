@@ -1,4 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import {
+  createBrowserRouter,
+  createRoutesFromElements,
+  Route,
+  RouterProvider,
+  Navigate,
+} from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { useAuth } from './hooks/useAuth'
 import { AppShell } from './components/layout/AppShell'
@@ -15,6 +21,8 @@ import { Payrolls } from './pages/hrm/Payrolls'
 import { Recruitment } from './pages/hrm/Recruitment'
 import { ShiftAttendance } from './pages/hrm/ShiftAttendance'
 import { ClockInOut } from './pages/hrm/ClockInOut'
+
+import { MyTasks } from './pages/myspace/MyTasks'
 
 import { Vehicles } from './pages/fleet/Vehicles'
 import { Drivers } from './pages/fleet/Drivers'
@@ -39,9 +47,9 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-function AppRoutes() {
-  return (
-    <Routes>
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route>
       <Route path="/" element={<Navigate to="/login" replace />} />
 
       <Route
@@ -53,9 +61,7 @@ function AppRoutes() {
         element={<PublicRoute><ForgotPassword /></PublicRoute>}
       />
 
-      <Route
-        element={<ProtectedRoute><AppShell /></ProtectedRoute>}
-      >
+      <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/live-news" element={<LiveNews />} />
 
@@ -66,6 +72,8 @@ function AppRoutes() {
         <Route path="/hrm/recruitment" element={<Recruitment />} />
         <Route path="/hrm/attendance" element={<ShiftAttendance />} />
         <Route path="/hrm/clock-in-out" element={<ClockInOut />} />
+
+        <Route path="/my-space/tasks" element={<MyTasks />} />
 
         <Route path="/fleet/vehicles" element={<Vehicles />} />
         <Route path="/fleet/drivers" element={<Drivers />} />
@@ -80,16 +88,14 @@ function AppRoutes() {
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />
-    </Routes>
-  )
-}
+    </Route>,
+  ),
+)
 
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </AuthProvider>
   )
 }

@@ -3,7 +3,7 @@ import { Plus, X, Loader2, Building2 } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
-import { getDepartments, createDepartment } from '../../services/hrm'
+import { getDepartments, createDepartment, type LookupOption } from '../../services/hrm'
 
 interface AddDepartmentDialogProps {
   onClose: () => void
@@ -134,7 +134,7 @@ function AddDepartmentDialog({ onClose, onSaved }: AddDepartmentDialogProps) {
 
 export function Departments() {
   const pageLoading = usePageLoad()
-  const [departments, setDepartments] = useState<string[]>([])
+  const [departments, setDepartments] = useState<LookupOption[]>([])
   const [fetchLoading, setFetchLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showDialog, setShowDialog] = useState(false)
@@ -182,13 +182,13 @@ export function Departments() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {departments.map((d) => (
-                <tr key={d} className="hover:bg-gray-50/60 transition-colors">
+                <tr key={d.value} className="hover:bg-gray-50/60 transition-colors">
                   <td className="table-td">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
                         <Building2 className="w-4 h-4" />
                       </div>
-                      <span className="font-medium text-gray-900">{d}</span>
+                      <span className="font-medium text-gray-900">{d.label}</span>
                     </div>
                   </td>
                 </tr>

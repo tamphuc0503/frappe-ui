@@ -4,12 +4,14 @@ import { CompanyInfoDialog } from '../ui/CompanyInfoDialog'
 import {
   LayoutDashboard,
   Newspaper,
+  User,
   Users,
   UserCircle,
   CalendarOff,
   Banknote,
   UserPlus,
   Clock,
+  ListChecks,
   LogIn,
   Truck,
   Car,
@@ -52,6 +54,14 @@ const navItems: NavItem[] = [
     path: '/live-news',
   },
   {
+    label: 'My Space',
+    icon: <User className="w-5 h-5" />,
+    children: [
+      { label: 'Clock In / Out', icon: <LogIn className="w-4 h-4" />, path: '/hrm/clock-in-out' },
+      { label: 'My Tasks', icon: <ListChecks className="w-4 h-4" />, path: '/my-space/tasks' },
+    ],
+  },
+  {
     label: 'HRM',
     icon: <Users className="w-5 h-5" />,
     children: [
@@ -60,7 +70,6 @@ const navItems: NavItem[] = [
       { label: 'Payrolls', icon: <Banknote className="w-4 h-4" />, path: '/hrm/payrolls' },
       { label: 'Recruitment', icon: <UserPlus className="w-4 h-4" />, path: '/hrm/recruitment' },
       { label: 'Shift & Attendance', icon: <Clock className="w-4 h-4" />, path: '/hrm/attendance' },
-      { label: 'Clock In / Out', icon: <LogIn className="w-4 h-4" />, path: '/hrm/clock-in-out' },
     ],
   },
   {

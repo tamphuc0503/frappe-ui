@@ -1,4 +1,5 @@
 import { Combobox } from '../../components/ui/Combobox'
+import type { LookupOption } from '../../services/hrm'
 import type { Employee, EmployeeStatus } from '../../types/hrm'
 
 export interface FormData {
@@ -53,12 +54,15 @@ export function validate(form: FormData): Partial<FormData> {
 }
 
 export interface DropdownOptions {
-  departments: string[]
-  designations: string[]
-  genders: string[]
+  departments: LookupOption[]
+  designations: LookupOption[]
+  genders: LookupOption[]
   loadingDepartments: boolean
   loadingDesignations: boolean
   loadingGenders: boolean
+  onOpenDepartments?: () => void
+  onOpenDesignations?: () => void
+  onOpenGenders?: () => void
 }
 
 interface FormFieldsProps {
@@ -69,10 +73,11 @@ interface FormFieldsProps {
   onShakeEnd: (field: keyof FormData) => void
   options: DropdownOptions
   firstInputRef?: React.Ref<HTMLInputElement>
+  emailReadOnly?: boolean
 }
 
 export function FormFields({
-  form, errors, shakingFields, onChange, onShakeEnd, options, firstInputRef,
+  form, errors, shakingFields, onChange, onShakeEnd, options, firstInputRef, emailReadOnly = false,
 }: FormFieldsProps) {
   const shakeClass = (f: keyof FormData) => (shakingFields.has(f) ? 'field-shake' : '')
   return (
@@ -100,8 +105,9 @@ export function FormFields({
             type="email"
             value={form.email}
             onChange={(e) => onChange('email', e.target.value)}
+            readOnly={emailReadOnly}
             placeholder="jane@oceanfleet.com"
-            className={`form-input ${errors.email ? 'border-red-400 focus:ring-red-400' : ''}`}
+            className={`form-input ${errors.email ? 'border-red-400 focus:ring-red-400' : ''} ${emailReadOnly ? 'bg-gray-50 text-gray-600 cursor-default' : ''}`}
           />
           {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
         </div>
@@ -132,8 +138,8 @@ export function FormFields({
             max={1}
             placeholder="Select department"
             loading={options.loadingDepartments}
-            disabled={options.loadingDepartments}
             error={!!errors.department}
+            onOpen={options.onOpenDepartments}
           />
           {errors.department && <p className="text-xs text-red-500 mt-1">{errors.department}</p>}
         </div>
@@ -148,8 +154,8 @@ export function FormFields({
             max={1}
             placeholder="Select position"
             loading={options.loadingDesignations}
-            disabled={options.loadingDesignations}
             error={!!errors.position}
+            onOpen={options.onOpenDesignations}
           />
           {errors.position && <p className="text-xs text-red-500 mt-1">{errors.position}</p>}
         </div>
@@ -167,8 +173,8 @@ export function FormFields({
             max={1}
             placeholder="Select gender"
             loading={options.loadingGenders}
-            disabled={options.loadingGenders}
             error={!!errors.gender}
+            onOpen={options.onOpenGenders}
           />
           {errors.gender && <p className="text-xs text-red-500 mt-1">{errors.gender}</p>}
         </div>

@@ -236,40 +236,43 @@ export function ClockInOut() {
     : '—'
 
   if (pageLoading) return (
-    <div>
+    <div className="h-full flex flex-col min-h-0">
       <SkPageHeader hasAction={false} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
-        <div className="card p-6 space-y-4">
-          <Sk className="h-4 w-20 rounded-md" />
-          <Sk className="h-10 w-48 rounded-lg" />
-          <Sk className="h-4 w-40 rounded-md" />
-          <div className="pt-5 border-t border-gray-100 grid grid-cols-3 gap-4">
-            {[1,2,3].map(i => <div key={i} className="space-y-1.5"><Sk className="h-3 w-14 rounded-md" /><Sk className="h-5 w-10 rounded-md" /></div>)}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+          <div className="card p-6 space-y-4">
+            <Sk className="h-4 w-20 rounded-md" />
+            <Sk className="h-10 w-48 rounded-lg" />
+            <Sk className="h-4 w-40 rounded-md" />
+            <div className="pt-5 border-t border-gray-100 grid grid-cols-3 gap-4">
+              {[1,2,3].map(i => <div key={i} className="space-y-1.5"><Sk className="h-3 w-14 rounded-md" /><Sk className="h-5 w-10 rounded-md" /></div>)}
+            </div>
+          </div>
+          <div className="card p-6 flex flex-col items-center justify-center gap-5">
+            <Sk className="h-8 w-48 rounded-full" />
+            <Sk className="h-14 w-36 rounded-2xl" />
+            <Sk className="h-4 w-32 rounded-md" />
           </div>
         </div>
-        <div className="card p-6 flex flex-col items-center justify-center gap-5">
-          <Sk className="h-8 w-48 rounded-full" />
-          <Sk className="h-14 w-36 rounded-2xl" />
-          <Sk className="h-4 w-32 rounded-md" />
+        <SkStatCards count={4} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="lg:col-span-2"><SkCalendarGrid /></div>
+          <SkClockPanel />
         </div>
-      </div>
-      <SkStatCards count={4} />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2"><SkCalendarGrid /></div>
-        <SkClockPanel />
       </div>
     </div>
   )
 
   return (
-    <div>
+    <div className="h-full flex flex-col min-h-0">
       <PageHeader
         title="Clock In / Out"
         subtitle={`Welcome, ${user?.name ?? 'User'} — track your work hours`}
       />
 
-      {/* Top section: live clock + action */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {/* Top section: live clock + action */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
         {/* Live clock card */}
         <div className="card p-6 flex flex-col justify-center">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">
@@ -648,6 +651,7 @@ export function ClockInOut() {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   )

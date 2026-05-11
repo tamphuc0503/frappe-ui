@@ -9,6 +9,7 @@ export const AVATAR_COLORS = [
 
 export interface FrappeEmployee {
   name: string
+  owner?: string
   employee_name?: string
   personal_email?: string
   company_email?: string
@@ -66,7 +67,7 @@ export const employeeCodec: Codec<Employee, FrappeEmployee> = {
     return {
       id: frappe.name,
       name: fullName,
-      email: frappe.company_email || frappe.personal_email || '',
+      email: frappe.owner || frappe.company_email || frappe.personal_email || '',
       phone: frappe.cell_number || '',
       department: frappe.department || '',
       position: frappe.designation || '',
@@ -113,7 +114,7 @@ export function toFrappeEmployeeUpdate(input: CreateEmployeeInput): Record<strin
 // Build the payload for `frappe.client.insert`. Asymmetric to the codec above
 // because Frappe's insert requires `first_name` / `last_name` / `doctype`,
 // which aren't part of the read shape.
-export function toFrappeEmployeeDoc(input: CreateEmployeeInput): Record<string, unknown> {
+export function toFrappeEmployeeDoc(input: CreateEmployeeInput, userId?: string): Record<string, unknown> {
   const parts = input.name.trim().split(/\s+/).filter(Boolean)
   const firstName = parts[0] || input.name
   const lastName = parts.slice(1).join(' ')
@@ -123,6 +124,7 @@ export function toFrappeEmployeeDoc(input: CreateEmployeeInput): Record<string, 
     first_name: firstName,
     last_name: lastName,
     employee_name: input.name.trim(),
+    user_id: userId,
     company_email: input.email,
     cell_number: input.phone,
     department: input.department,
