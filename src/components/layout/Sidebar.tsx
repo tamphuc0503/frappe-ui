@@ -56,10 +56,14 @@ const navItems: NavItem[] = [
     path: '/live-news',
   },
   {
+    label: 'Clock In / Out',
+    icon: <LogIn className="w-5 h-5" />,
+    path: '/hrm/clock-in-out',
+  },
+  {
     label: 'My Space',
     icon: <User className="w-5 h-5" />,
     children: [
-      { label: 'Clock In / Out', icon: <LogIn className="w-4 h-4" />, path: '/hrm/clock-in-out' },
       { label: 'My Tasks', icon: <ListChecks className="w-4 h-4" />, path: '/my-space/tasks' },
       { label: 'My Assets', icon: <FolderOpen className="w-4 h-4" />, path: '/my-space/assets' },
       { label: 'My Leaves', icon: <CalendarOff className="w-4 h-4" />, path: '/my-space/leaves' },

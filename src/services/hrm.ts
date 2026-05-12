@@ -38,25 +38,26 @@ export interface LookupOption {
 // `name` is the doctype's primary key (what we send back to Frappe in link
 // fields); the display field is what we show to the user. They are not always
 // the same — e.g. Department has `name='HR-001'`, `department_name='Human Resources'`.
+function parseObjectRow(r: Record<string, unknown>, labelKey: string): LookupOption | null {
+  const key = typeof r.name === 'string' ? r.name : ''
+  if (!key) return null
+  const rawLabel = r[labelKey]
+  const lbl = typeof rawLabel === 'string' && rawLabel.length > 0 ? rawLabel : key
+  const id = typeof r.id === 'string' && r.id.length > 0 ? r.id : undefined
+  return { value: key, label: lbl, id }
+}
+
 function toLookupOptions(rows: unknown, labelKey: string): LookupOption[] {
   if (!Array.isArray(rows)) return []
-  const out: LookupOption[] = []
-  for (const r of rows) {
+  return rows.reduce<LookupOption[]>((out, r) => {
     if (typeof r === 'string' && r.length > 0) {
       out.push({ value: r, label: r })
-      continue
+    } else if (r && typeof r === 'object') {
+      const opt = parseObjectRow(r as Record<string, unknown>, labelKey)
+      if (opt) out.push(opt)
     }
-    if (r && typeof r === 'object') {
-      const obj = r as Record<string, unknown>
-      const key = typeof obj.name === 'string' ? obj.name : ''
-      const lbl = typeof obj[labelKey] === 'string' && (obj[labelKey] as string).length > 0
-        ? (obj[labelKey] as string)
-        : key
-      const id = typeof obj.id === 'string' && obj.id.length > 0 ? obj.id : undefined
-      if (key) out.push({ value: key, label: lbl, id })
-    }
-  }
-  return out
+    return out
+  }, [])
 }
 
 export async function getDepartments(): Promise<LookupOption[]> {
@@ -231,14 +232,108 @@ export async function createDepartment(name: string): Promise<void> {
   }
 }
 
-export interface ResignationInput {
+// ── Employee Checkin ─────────────────────────────────────────────────
+
+export interface EmployeeCheckinRecord {
+  name: string
+  employee: string
+  employee_name: string
+  log_type: 'IN' | 'OUT'
+  time: string
+}
+
+let _employeeIdCache: string | null = null
+let _employeeIdPromise: Promise<string> | null = null
+
+async function getCurrentEmployeeId(): Promise<string> {
+  if (_employeeIdCache) return _employeeIdCache
+  if (_employeeIdPromise) return _employeeIdPromise
+
+  _employeeIdPromise = (async () => {
+    const userCache = getUserCache()
+    if (!userCache?.email) throw new Error('User not logged in.')
+    const params = new URLSearchParams({
+      doctype: 'Employee',
+      filters: JSON.stringify([['user_id', '=', userCache.email]]),
+      fields: JSON.stringify(['name']),
+      limit_page_length: '1',
+    })
+    const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+    const data = (await res.json()) as GetListResponse<{ name: string }>
+    const id = data.message?.[0]?.name
+    if (!id) throw new Error('No employee record linked to current user.')
+    _employeeIdCache = id
+    return id
+  })()
+
+  try {
+    return await _employeeIdPromise
+  } catch (err) {
+    _employeeIdPromise = null
+    throw err
+  }
+}
+
+export async function createEmployeeCheckin(logType: 'IN' | 'OUT'): Promise<void> {
+  const employeeId = await getCurrentEmployeeId()
+
+  const doc = {
+    doctype: 'Employee Checkin',
+    employee: employeeId,
+    log_type: logType,
+    time: new Date().toISOString().replace('T', ' ').slice(0, 19),
+  }
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.insert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ doc }),
+  })
+  const data = (await res.json()) as InsertResponse
+  if (!res.ok) {
+    throw new Error(data.exc ?? data._server_messages ?? `Failed to clock ${logType.toLowerCase()}.`)
+  }
+}
+
+export async function getEmployeeCheckins(date: string): Promise<EmployeeCheckinRecord[]> {
+  let employeeId: string
+  try {
+    employeeId = await getCurrentEmployeeId()
+  } catch {
+    return []
+  }
+
+  const startTime = `${date} 00:00:00`
+  const endTime = `${date} 23:59:59`
+
+  const params = new URLSearchParams({
+    doctype: 'Employee Checkin',
+    fields: JSON.stringify(['name', 'employee', 'employee_name', 'log_type', 'time']),
+    filters: JSON.stringify([
+      ['employee', '=', employeeId],
+      ['time', '>=', startTime],
+      ['time', '<=', endTime],
+    ]),
+    order_by: 'time asc',
+    limit_page_length: '0',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<EmployeeCheckinRecord>
+  if (!res.ok || data.exc) {
+    throw new Error(data.exc ?? 'Failed to fetch checkins.')
+  }
+  return data.message ?? []
+}
+
+// ── Resignation ──────────────────────────────────────────────────────
+
+interface CreateResignationInput {
   employee: string
   resignationLetterDate: string
   boardingBegins: string
   reason: string
 }
 
-export async function createResignation(input: ResignationInput): Promise<void> {
+export async function createResignation(input: CreateResignationInput): Promise<void> {
   const doc = {
     doctype: 'Employee Separation',
     employee: input.employee,
@@ -248,21 +343,11 @@ export async function createResignation(input: ResignationInput): Promise<void> 
   }
   const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.insert`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ doc }),
   })
   const data = (await res.json()) as InsertResponse
-  if (!res.ok || data.exc) {
-    let msg = 'Failed to submit resignation.'
-    const serverMsg = data._server_messages
-    if (serverMsg) {
-      try {
-        const parsed = JSON.parse(serverMsg) as string | string[]
-        const first = Array.isArray(parsed) ? parsed[0] : parsed
-        const inner = JSON.parse(first) as { message?: string }
-        if (inner.message) msg = inner.message
-      } catch { /* use default */ }
-    }
-    throw new Error(msg)
+  if (!res.ok) {
+    throw new Error(data.exc ?? data._server_messages ?? 'Failed to submit resignation.')
   }
 }

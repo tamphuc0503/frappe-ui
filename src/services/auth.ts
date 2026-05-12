@@ -101,7 +101,8 @@ export async function frappeLogin(usr: string, pwd: string): Promise<{ fullName:
   console.info('[auth] login extractSid =', sid, '| document.cookie =', document.cookie, '| stored sid =', getSid())
   if (sid) setSid(sid)
 
-  await generateApiKeys(usr)
+  // generateApiKeys disabled — auth now uses sid cookie via credentials: 'include'.
+  // await generateApiKeys(usr)
 
   const roles = await getUserRoles().catch(() => [] as string[])
 

@@ -189,6 +189,7 @@ export function MyPage() {
 - **Sheet-from-top dialogs** use `fixed inset-x-0 top-0` container + `rounded-b-2xl` panel + `.dialog-enter` class. The backdrop uses `.backdrop-enter`.
 - **Submit error banners animate height** — every dialog/modal that surfaces a submit error must wrap the banner in `<div className={`overflow-hidden transition-all duration-300 ease-in-out ${error ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>` so the dialog grows/shrinks smoothly when the error appears or clears, matching `Login.tsx` / `ForgotPassword.tsx`. Pair with a separate `errorShaking` state and `.field-shake` on the inner banner; reset via `onAnimationEnd`.
 - Close on Escape via `window.addEventListener('keydown', ...)` in a `useEffect` — clean up on unmount.
+- **Clear errors before submit/save.** Every submit handler and save action must call `setSubmitError(null)` (and clear any field-level errors) as its first step, before validation or the API call. This ensures stale error banners from a previous attempt are hidden immediately when the user retries. Likewise, any change to form inputs (text, dropdown, date, toggle) should clear the submit error so the banner disappears as soon as the user corrects their input.
 
 ---
 

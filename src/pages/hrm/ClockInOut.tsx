@@ -13,8 +13,10 @@ import {
   Timer,
   CalendarDays,
   TrendingUp,
+  Loader2,
 } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { createEmployeeCheckin, getEmployeeCheckins, type EmployeeCheckinRecord } from '../../services/hrm'
 import type { ClockRecord } from '../../types/hrm'
 
 const STORAGE_KEY = 'oceanfleet_clock_records'
@@ -100,7 +102,22 @@ export function ClockInOut() {
   const [records, setRecords] = useState<ClockRecord[]>(loadRecords)
   const [calMonth, setCalMonth] = useState(now.getMonth())
   const [calYear, setCalYear] = useState(now.getFullYear())
-  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = useState<string | null>(toDateStr(new Date()))
+  const [checkins, setCheckins] = useState<EmployeeCheckinRecord[]>([])
+  const [checkinsLoading, setCheckinsLoading] = useState(false)
+
+  // Fetch checkins from Frappe when a date is selected
+  useEffect(() => {
+    if (!selectedDate) {
+      setCheckins([])
+      return
+    }
+    setCheckinsLoading(true)
+    getEmployeeCheckins(selectedDate)
+      .then((data) => setCheckins(data))
+      .catch(() => setCheckins([]))
+      .finally(() => setCheckinsLoading(false))
+  }, [selectedDate])
 
   // Live clock tick
   useEffect(() => {
@@ -112,32 +129,50 @@ export function ClockInOut() {
   const todayRecord = records.find((r) => r.date === todayStr) ?? null
   const isClockedIn = todayRecord?.clockIn != null && todayRecord.clockOut == null
 
+  const [clockError, setClockError] = useState<string | null>(null)
+  const [clockingIn, setClockingIn] = useState(false)
+  const [clockingOut, setClockingOut] = useState(false)
+
   const handleClockIn = useCallback(() => {
+    setClockError(null)
+    setClockingIn(true)
     const timeStr = toTimeStr(now)
-    setRecords((prev) => {
-      const existing = prev.find((r) => r.date === todayStr)
-      let next: ClockRecord[]
-      if (existing) {
-        next = prev.map((r) =>
-          r.date === todayStr ? { ...r, clockIn: timeStr, clockOut: null } : r
-        )
-      } else {
-        next = [...prev, { date: todayStr, clockIn: timeStr, clockOut: null }]
-      }
-      saveRecords(next)
-      return next
-    })
+    createEmployeeCheckin('IN')
+      .then(() => {
+        setRecords((prev) => {
+          const existing = prev.find((r) => r.date === todayStr)
+          let next: ClockRecord[]
+          if (existing) {
+            next = prev.map((r) =>
+              r.date === todayStr ? { ...r, clockIn: timeStr, clockOut: null } : r
+            )
+          } else {
+            next = [...prev, { date: todayStr, clockIn: timeStr, clockOut: null }]
+          }
+          saveRecords(next)
+          return next
+        })
+      })
+      .catch((err) => setClockError(err instanceof Error ? err.message : 'Failed to clock in.'))
+      .finally(() => setClockingIn(false))
   }, [now, todayStr])
 
   const handleClockOut = useCallback(() => {
+    setClockError(null)
+    setClockingOut(true)
     const timeStr = toTimeStr(now)
-    setRecords((prev) => {
-      const next = prev.map((r) =>
-        r.date === todayStr ? { ...r, clockOut: timeStr } : r
-      )
-      saveRecords(next)
-      return next
-    })
+    createEmployeeCheckin('OUT')
+      .then(() => {
+        setRecords((prev) => {
+          const next = prev.map((r) =>
+            r.date === todayStr ? { ...r, clockOut: timeStr } : r
+          )
+          saveRecords(next)
+          return next
+        })
+      })
+      .catch((err) => setClockError(err instanceof Error ? err.message : 'Failed to clock out.'))
+      .finally(() => setClockingOut(false))
   }, [now, todayStr])
 
   // Stats
@@ -330,18 +365,20 @@ export function ClockInOut() {
           {!isClockedIn && !todayRecord?.clockOut ? (
             <button
               onClick={handleClockIn}
-              className="flex items-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg rounded-2xl transition-colors shadow-lg shadow-emerald-200 active:scale-95"
+              disabled={clockingIn}
+              className="flex items-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg rounded-2xl transition-colors shadow-lg shadow-emerald-200 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <LogIn className="w-6 h-6" />
-              Clock In
+              {clockingIn ? <Loader2 className="w-6 h-6 animate-spin" /> : <LogIn className="w-6 h-6" />}
+              {clockingIn ? 'Clocking In…' : 'Clock In'}
             </button>
           ) : isClockedIn ? (
             <button
               onClick={handleClockOut}
-              className="flex items-center gap-3 px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-bold text-lg rounded-2xl transition-colors shadow-lg shadow-red-200 active:scale-95"
+              disabled={clockingOut}
+              className="flex items-center gap-3 px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-bold text-lg rounded-2xl transition-colors shadow-lg shadow-red-200 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <LogOut className="w-6 h-6" />
-              Clock Out
+              {clockingOut ? <Loader2 className="w-6 h-6 animate-spin" /> : <LogOut className="w-6 h-6" />}
+              {clockingOut ? 'Clocking Out…' : 'Clock Out'}
             </button>
           ) : (
             <div className="flex flex-col items-center gap-2">
@@ -349,12 +386,20 @@ export function ClockInOut() {
               <p className="text-sm text-gray-500">You've completed your day</p>
               <button
                 onClick={handleClockIn}
-                className="text-xs text-blue-600 hover:text-blue-700 font-medium underline underline-offset-2"
+                disabled={clockingIn}
+                className="text-xs text-blue-600 hover:text-blue-700 font-medium underline underline-offset-2 disabled:opacity-50"
               >
-                Clock in again
+                {clockingIn ? 'Clocking in…' : 'Clock in again'}
               </button>
             </div>
           )}
+
+          {/* Error banner */}
+          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${clockError ? 'max-h-16 opacity-100' : 'max-h-0 opacity-0'}`}>
+            <div className="px-4 py-2 bg-red-50 border border-red-200 rounded-lg">
+              <span className="text-red-600 text-sm">{clockError}</span>
+            </div>
+          </div>
 
           {isClockedIn && (
             <p className="text-xs text-gray-400">
@@ -557,47 +602,62 @@ export function ClockInOut() {
               : 'Select a day'}
           </h2>
 
-          {selectedDate && selectedRecord ? (
+          {selectedDate && checkinsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+            </div>
+          ) : selectedDate && checkins.length > 0 ? (
             <div className="space-y-4">
               {/* Status */}
-              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
-                selectedRecord.clockIn && selectedRecord.clockOut
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : selectedRecord.clockIn
-                  ? 'bg-amber-50 text-amber-700'
-                  : 'bg-gray-50 text-gray-500'
-              }`}>
-                {selectedRecord.clockIn && selectedRecord.clockOut ? (
-                  <CheckCircle2 className="w-4 h-4" />
-                ) : (
-                  <Clock className="w-4 h-4" />
-                )}
-                {selectedRecord.clockIn && selectedRecord.clockOut
-                  ? 'Complete'
-                  : selectedRecord.clockIn
-                  ? 'In progress'
-                  : 'No record'}
-              </div>
+              {(() => {
+                const firstIn = checkins.find((c) => c.logType === 'IN')
+                const lastOut = [...checkins].reverse().find((c) => c.logType === 'OUT')
+                const clockIn = firstIn ? firstIn.time.slice(11, 16) : null
+                const clockOut = lastOut ? lastOut.time.slice(11, 16) : null
+                const isComplete = clockIn != null && clockOut != null
+                return (
+                  <>
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
+                      isComplete ? 'bg-emerald-50 text-emerald-700' : clockIn ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-500'
+                    }`}>
+                      {isComplete ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                      {isComplete ? 'Complete' : clockIn ? 'In progress' : 'No record'}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-gray-50 rounded-xl p-3">
+                        <p className="text-xs text-gray-400 mb-1">First Clock In</p>
+                        <p className="text-lg font-bold text-gray-900">{clockIn ?? '—'}</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-xl p-3">
+                        <p className="text-xs text-gray-400 mb-1">Last Clock Out</p>
+                        <p className="text-lg font-bold text-gray-900">{clockOut ?? '—'}</p>
+                      </div>
+                    </div>
+                    {isComplete && clockIn && clockOut && (
+                      <div className="bg-blue-50 rounded-xl p-3">
+                        <p className="text-xs text-blue-500 mb-1">Total Duration</p>
+                        <p className="text-xl font-bold text-blue-700">{calcDuration(clockIn, clockOut)}</p>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-xs text-gray-400 mb-1">Clock In</p>
-                  <p className="text-lg font-bold text-gray-900">{selectedRecord.clockIn ?? '—'}</p>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-xs text-gray-400 mb-1">Clock Out</p>
-                  <p className="text-lg font-bold text-gray-900">{selectedRecord.clockOut ?? '—'}</p>
+              {/* All checkin entries */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">All Checkins ({checkins.length})</p>
+                <div className="space-y-1.5">
+                  {checkins.map((c, i) => (
+                    <div key={`${c.time}-${i}`} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg text-sm">
+                      <div className="flex items-center gap-2">
+                        {c.logType === 'IN' ? <LogIn className="w-3.5 h-3.5 text-emerald-500" /> : <LogOut className="w-3.5 h-3.5 text-red-500" />}
+                        <span className={`font-medium ${c.logType === 'IN' ? 'text-emerald-700' : 'text-red-700'}`}>{c.logType}</span>
+                      </div>
+                      <span className="text-gray-700 tabular-nums">{c.time.slice(11, 16)}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-
-              {selectedRecord.clockIn && selectedRecord.clockOut && (
-                <div className="bg-blue-50 rounded-xl p-3">
-                  <p className="text-xs text-blue-500 mb-1">Total Duration</p>
-                  <p className="text-xl font-bold text-blue-700">
-                    {calcDuration(selectedRecord.clockIn, selectedRecord.clockOut)}
-                  </p>
-                </div>
-              )}
             </div>
           ) : selectedDate ? (
             <div className="flex flex-col items-center justify-center flex-1 py-8 text-center">
@@ -612,44 +672,6 @@ export function ClockInOut() {
               <p className="text-xs text-gray-400 mt-1">to view clock-in/out details</p>
             </div>
           )}
-
-          {/* Recent 5 records */}
-          <div className="pt-4 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              Recent Activity
-            </p>
-            <div className="space-y-2">
-              {[...records]
-                .filter((r) => r.clockIn)
-                .sort((a, b) => b.date.localeCompare(a.date))
-                .slice(0, 5)
-                .map((r) => (
-                  <div
-                    key={r.date}
-                    onClick={() => setSelectedDate(r.date)}
-                    className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                  >
-                    <div>
-                      <p className="text-xs font-medium text-gray-900">
-                        {new Date(r.date + 'T12:00:00').toLocaleDateString('en-US', {
-                          month: 'short', day: 'numeric',
-                        })}
-                      </p>
-                      <p className="text-[11px] text-gray-400">
-                        {r.clockIn} → {r.clockOut ?? 'active'}
-                      </p>
-                    </div>
-                    {r.clockIn && r.clockOut ? (
-                      <span className="text-xs font-semibold text-emerald-600">
-                        {calcDuration(r.clockIn, r.clockOut)}
-                      </span>
-                    ) : (
-                      <span className="text-xs font-semibold text-amber-500">—</span>
-                    )}
-                  </div>
-                ))}
-            </div>
-          </div>
         </div>
       </div>
       </div>
