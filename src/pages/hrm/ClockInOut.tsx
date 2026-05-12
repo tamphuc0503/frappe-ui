@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { useAuth } from '../../hooks/useAuth'
 import { Sk, SkPageHeader, SkStatCards, SkCalendarGrid, SkClockPanel } from '../../components/ui/Skeleton'
@@ -14,45 +14,15 @@ import {
   CalendarDays,
   TrendingUp,
   Loader2,
+  RefreshCw,
+  // BarChart3,
+  // List,
 } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
-import { createEmployeeCheckin, getEmployeeCheckins, type EmployeeCheckinRecord } from '../../services/hrm'
-import type { ClockRecord } from '../../types/hrm'
-
-const STORAGE_KEY = 'oceanfleet_clock_records'
-
-const SEED_RECORDS: ClockRecord[] = [
-  { date: '2026-04-28', clockIn: '08:05', clockOut: '17:10' },
-  { date: '2026-04-29', clockIn: '07:58', clockOut: '17:02' },
-  { date: '2026-04-30', clockIn: '08:12', clockOut: '17:20' },
-  { date: '2026-05-01', clockIn: '08:02', clockOut: '17:15' },
-  { date: '2026-05-02', clockIn: '08:00', clockOut: '16:55' },
-  { date: '2026-05-04', clockIn: '07:55', clockOut: '17:05' },
-  { date: '2026-05-05', clockIn: '08:08', clockOut: '17:30' },
-  { date: '2026-05-06', clockIn: '08:00', clockOut: '17:00' },
-  { date: '2026-05-07', clockIn: '09:14', clockOut: '18:30' },
-]
-
-function loadRecords(): ClockRecord[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return JSON.parse(raw) as ClockRecord[]
-  } catch {
-    /* ignore */
-  }
-  return SEED_RECORDS
-}
-
-function saveRecords(records: ClockRecord[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
-}
+import { createEmployeeCheckin, getMonthlyCheckins, type EmployeeCheckinRecord } from '../../services/hrm'
 
 function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10)
-}
-
-function toTimeStr(d: Date): string {
-  return d.toTimeString().slice(0, 5)
 }
 
 function calcDuration(clockIn: string, clockOut: string): string {
@@ -63,12 +33,6 @@ function calcDuration(clockIn: string, clockOut: string): string {
   const h = Math.floor(totalMins / 60)
   const m = totalMins % 60
   return `${h}h ${m}m`
-}
-
-function calcMinutes(clockIn: string, clockOut: string): number {
-  const [ih, im] = clockIn.split(':').map(Number)
-  const [oh, om] = clockOut.split(':').map(Number)
-  return Math.max(0, (oh * 60 + om) - (ih * 60 + im))
 }
 
 function durationFromNow(clockIn: string, now: Date): string {
@@ -99,25 +63,56 @@ export function ClockInOut() {
   const pageLoading = usePageLoad()
   const { user } = useAuth()
   const [now, setNow] = useState(new Date())
-  const [records, setRecords] = useState<ClockRecord[]>(loadRecords)
+  const [monthlyCheckins, setMonthlyCheckins] = useState<EmployeeCheckinRecord[]>([])
   const [calMonth, setCalMonth] = useState(now.getMonth())
   const [calYear, setCalYear] = useState(now.getFullYear())
   const [selectedDate, setSelectedDate] = useState<string | null>(toDateStr(new Date()))
-  const [checkins, setCheckins] = useState<EmployeeCheckinRecord[]>([])
-  const [checkinsLoading, setCheckinsLoading] = useState(false)
+  const [detailView] = useState<'timeline' | 'list'>('list')
 
-  // Fetch checkins from Frappe when a date is selected
-  useEffect(() => {
-    if (!selectedDate) {
-      setCheckins([])
-      return
+  // Build daily summaries from monthly checkins
+  const dailySummary = useMemo(() => {
+    const map = new Map<string, { clockIn: string | null; clockOut: string | null; totalMins: number }>()
+    const sorted = [...monthlyCheckins].sort((a, b) => a.time.localeCompare(b.time))
+    for (const c of sorted) {
+      const date = c.time.slice(0, 10)
+      if (!map.has(date)) map.set(date, { clockIn: null, clockOut: null, totalMins: 0 })
+      const entry = map.get(date)!
+      const t = c.time.slice(11, 16)
+      if (c.log_type === 'IN' && !entry.clockIn) entry.clockIn = t
+      if (c.log_type === 'OUT') entry.clockOut = t
     }
-    setCheckinsLoading(true)
-    getEmployeeCheckins(selectedDate)
-      .then((data) => setCheckins(data))
-      .catch(() => setCheckins([]))
-      .finally(() => setCheckinsLoading(false))
-  }, [selectedDate])
+    // Calc total work minutes per day (pair IN→OUT)
+    for (const [date] of map) {
+      const dayCheckins = sorted.filter((c) => c.time.slice(0, 10) === date)
+      let openIn: number | null = null
+      let totalMins = 0
+      for (const c of dayCheckins) {
+        const [h, m] = c.time.slice(11, 16).split(':').map(Number)
+        if (c.log_type === 'IN' && openIn === null) openIn = h * 60 + m
+        else if (c.log_type === 'OUT' && openIn !== null) {
+          totalMins += (h * 60 + m) - openIn
+          openIn = null
+        }
+      }
+      map.get(date)!.totalMins = totalMins
+    }
+    return map
+  }, [monthlyCheckins])
+
+  // Fetch monthly checkins when calendar month changes
+  useEffect(() => {
+    getMonthlyCheckins(calYear, calMonth)
+      .then((data) => setMonthlyCheckins(data))
+      .catch(() => setMonthlyCheckins([]))
+  }, [calYear, calMonth])
+
+  // Derive selected date checkins from monthly data
+  const checkins = useMemo(() => {
+    if (!selectedDate) return []
+    return [...monthlyCheckins]
+      .filter((c) => c.time.slice(0, 10) === selectedDate)
+      .sort((a, b) => a.time.localeCompare(b.time))
+  }, [monthlyCheckins, selectedDate])
 
   // Live clock tick
   useEffect(() => {
@@ -126,88 +121,81 @@ export function ClockInOut() {
   }, [])
 
   const todayStr = toDateStr(now)
-  const todayRecord = records.find((r) => r.date === todayStr) ?? null
-  const isClockedIn = todayRecord?.clockIn != null && todayRecord.clockOut == null
+  const todaySummary = dailySummary.get(todayStr)
+
+  // Determine clock state from last checkin of today
+  const todayCheckins = useMemo(() =>
+    [...monthlyCheckins]
+      .filter((c) => c.time.slice(0, 10) === todayStr)
+      .sort((a, b) => a.time.localeCompare(b.time)),
+    [monthlyCheckins, todayStr]
+  )
+  const lastCheckin = todayCheckins.at(-1) ?? null
+  const isClockedIn = lastCheckin?.log_type === 'IN'
 
   const [clockError, setClockError] = useState<string | null>(null)
   const [clockingIn, setClockingIn] = useState(false)
   const [clockingOut, setClockingOut] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  // Refresh monthly data after clock in/out
+  const refreshMonthly = useCallback(() => {
+    return getMonthlyCheckins(calYear, calMonth)
+      .then((data) => setMonthlyCheckins(data))
+      .catch(() => {/* ignore */})
+  }, [calYear, calMonth])
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true)
+    refreshMonthly().finally(() => setRefreshing(false))
+  }, [refreshMonthly])
 
   const handleClockIn = useCallback(() => {
     setClockError(null)
     setClockingIn(true)
-    const timeStr = toTimeStr(now)
     createEmployeeCheckin('IN')
-      .then(() => {
-        setRecords((prev) => {
-          const existing = prev.find((r) => r.date === todayStr)
-          let next: ClockRecord[]
-          if (existing) {
-            next = prev.map((r) =>
-              r.date === todayStr ? { ...r, clockIn: timeStr, clockOut: null } : r
-            )
-          } else {
-            next = [...prev, { date: todayStr, clockIn: timeStr, clockOut: null }]
-          }
-          saveRecords(next)
-          return next
-        })
-      })
+      .then(() => refreshMonthly())
       .catch((err) => setClockError(err instanceof Error ? err.message : 'Failed to clock in.'))
       .finally(() => setClockingIn(false))
-  }, [now, todayStr])
+  }, [refreshMonthly])
 
   const handleClockOut = useCallback(() => {
     setClockError(null)
     setClockingOut(true)
-    const timeStr = toTimeStr(now)
     createEmployeeCheckin('OUT')
-      .then(() => {
-        setRecords((prev) => {
-          const next = prev.map((r) =>
-            r.date === todayStr ? { ...r, clockOut: timeStr } : r
-          )
-          saveRecords(next)
-          return next
-        })
-      })
+      .then(() => refreshMonthly())
       .catch((err) => setClockError(err instanceof Error ? err.message : 'Failed to clock out.'))
       .finally(() => setClockingOut(false))
-  }, [now, todayStr])
+  }, [refreshMonthly])
 
-  // Stats
+  // Stats from dailySummary
   const thisWeekTotal = (() => {
     const day = now.getDay()
     const weekStart = new Date(now)
     weekStart.setDate(now.getDate() - day)
     weekStart.setHours(0, 0, 0, 0)
+    const weekStartStr = toDateStr(weekStart)
     let mins = 0
-    records.forEach((r) => {
-      if (r.date >= toDateStr(weekStart) && r.date <= todayStr && r.clockIn && r.clockOut) {
-        mins += calcMinutes(r.clockIn, r.clockOut)
-      }
-    })
+    for (const [date, s] of dailySummary) {
+      if (date >= weekStartStr && date <= todayStr) mins += s.totalMins
+    }
     const h = Math.floor(mins / 60)
     const m = mins % 60
     return `${h}h ${m}m`
   })()
 
-  const thisMonthDaysWorked = records.filter((r) => {
-    const [y, m] = r.date.split('-').map(Number)
-    return y === now.getFullYear() && m - 1 === now.getMonth() && r.clockIn
-  }).length
+  const thisMonthDaysWorked = dailySummary.size
 
   const avgStartTime = (() => {
-    const monthRecs = records.filter((r) => {
-      const [y, m] = r.date.split('-').map(Number)
-      return y === now.getFullYear() && m - 1 === now.getMonth() && r.clockIn
-    })
-    if (!monthRecs.length) return '—'
-    const totalMins = monthRecs.reduce((sum, r) => {
-      const [h, m] = r.clockIn!.split(':').map(Number)
-      return sum + h * 60 + m
-    }, 0)
-    const avg = Math.round(totalMins / monthRecs.length)
+    const clockIns: number[] = []
+    for (const [, s] of dailySummary) {
+      if (s.clockIn) {
+        const [h, m] = s.clockIn.split(':').map(Number)
+        clockIns.push(h * 60 + m)
+      }
+    }
+    if (!clockIns.length) return '—'
+    const avg = Math.round(clockIns.reduce((a, b) => a + b, 0) / clockIns.length)
     const h = Math.floor(avg / 60)
     const m = avg % 60
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
@@ -222,9 +210,9 @@ export function ClockInOut() {
     return day >= 1 && day <= daysInMonth ? day : null
   })
 
-  const getRecord = (day: number) => {
+  const getDaySummary = (day: number) => {
     const d = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return records.find((r) => r.date === d)
+    return dailySummary.get(d) ?? null
   }
 
   const isToday = (day: number) =>
@@ -262,13 +250,14 @@ export function ClockInOut() {
     return `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
   }
 
-  const selectedRecord = selectedDate ? records.find((r) => r.date === selectedDate) : null
-
-  const todayDuration = todayRecord?.clockIn
-    ? todayRecord.clockOut
-      ? calcDuration(todayRecord.clockIn, todayRecord.clockOut)
-      : durationFromNow(todayRecord.clockIn, now)
-    : '—'
+  const todayDuration = (() => {
+    if (!todaySummary?.clockIn) return '—'
+    const mins = todaySummary.totalMins
+    if (mins <= 0) return '0h 0m'
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    return `${h}h ${m}m`
+  })()
 
   if (pageLoading) return (
     <div className="h-full flex flex-col min-h-0">
@@ -300,10 +289,20 @@ export function ClockInOut() {
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      <PageHeader
-        title="Clock In / Out"
-        subtitle={`Welcome, ${user?.name ?? 'User'} — track your work hours`}
-      />
+      <div className="flex items-center justify-between mb-4">
+        <PageHeader
+          title="Clock In / Out"
+          subtitle={`Welcome, ${user?.name ?? 'User'} — track your work hours`}
+        />
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
+          title="Refresh"
+        >
+          <RefreshCw className={`w-4.5 h-4.5 ${refreshing ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
 
       <div className="flex-1 overflow-y-auto min-h-0">
         {/* Top section: live clock + action */}
@@ -325,13 +324,13 @@ export function ClockInOut() {
             <div>
               <p className="text-xs text-gray-400 mb-1">Clock In</p>
               <p className="text-sm font-semibold text-gray-900">
-                {todayRecord?.clockIn ?? '—'}
+                {todaySummary?.clockIn ?? '—'}
               </p>
             </div>
             <div>
               <p className="text-xs text-gray-400 mb-1">Clock Out</p>
               <p className="text-sm font-semibold text-gray-900">
-                {todayRecord?.clockOut ?? (isClockedIn ? <span className="text-blue-500">In progress</span> : '—')}
+                {todaySummary?.clockOut ?? (isClockedIn ? <span className="text-blue-500">In progress</span> : '—')}
               </p>
             </div>
             <div>
@@ -347,22 +346,22 @@ export function ClockInOut() {
           <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${
             isClockedIn
               ? 'bg-emerald-100 text-emerald-700'
-              : todayRecord?.clockOut
+              : todaySummary?.clockOut
               ? 'bg-blue-100 text-blue-700'
               : 'bg-gray-100 text-gray-500'
           }`}>
             <span className={`w-2 h-2 rounded-full ${
-              isClockedIn ? 'bg-emerald-500 animate-pulse' : todayRecord?.clockOut ? 'bg-blue-500' : 'bg-gray-400'
+              isClockedIn ? 'bg-emerald-500 animate-pulse' : todaySummary?.clockOut ? 'bg-blue-500' : 'bg-gray-400'
             }`} />
             {isClockedIn
-              ? `Clocked in since ${todayRecord?.clockIn}`
-              : todayRecord?.clockOut
+              ? `Clocked in since ${todaySummary?.clockIn}`
+              : todaySummary?.clockOut
               ? 'Work day complete'
               : 'Not clocked in'}
           </div>
 
           {/* Big action button */}
-          {!isClockedIn && !todayRecord?.clockOut ? (
+          {!isClockedIn && !todaySummary?.clockOut ? (
             <button
               onClick={handleClockIn}
               disabled={clockingIn}
@@ -403,7 +402,7 @@ export function ClockInOut() {
 
           {isClockedIn && (
             <p className="text-xs text-gray-400">
-              Working for <span className="font-semibold text-gray-700">{durationFromNow(todayRecord!.clockIn!, now)}</span>
+              Working for <span className="font-semibold text-gray-700">{durationFromNow(todaySummary!.clockIn!, now)}</span>
             </p>
           )}
         </div>
@@ -450,9 +449,9 @@ export function ClockInOut() {
       </div>
 
       {/* Calendar + detail panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Calendar */}
-        <div className="lg:col-span-2 card p-5">
+        <div className="card p-5">
           {/* Calendar header */}
           <div className="flex items-center justify-between mb-5">
             <h2 className="font-semibold text-gray-900">
@@ -499,7 +498,7 @@ export function ClockInOut() {
                 return <div key={`empty-${idx}`} className="aspect-square" />
               }
 
-              const record = getRecord(day)
+              const record = getDaySummary(day)
               const today = isToday(day)
               const future = isFuture(day)
               const past = isPast(day)
@@ -545,22 +544,13 @@ export function ClockInOut() {
                     {day}
                   </span>
 
-                  {hasClockIn && (
+                  {hasClockIn && record.totalMins > 0 && (
                     <span
                       className={`text-[9px] font-medium leading-tight mt-0.5 ${
                         today ? 'text-blue-100' : 'text-emerald-600'
                       }`}
                     >
-                      {record!.clockIn}
-                    </span>
-                  )}
-                  {hasClockOut && (
-                    <span
-                      className={`text-[9px] font-medium leading-tight ${
-                        today ? 'text-blue-200' : 'text-red-500'
-                      }`}
-                    >
-                      {record!.clockOut}
+                      {Math.floor(record.totalMins / 60)}h {record.totalMins % 60}m
                     </span>
                   )}
                   {inProgress && !today && (
@@ -594,35 +584,46 @@ export function ClockInOut() {
 
         {/* Detail panel */}
         <div className="card p-5 flex flex-col gap-4">
-          <h2 className="font-semibold text-gray-900 text-sm">
-            {selectedDate
-              ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', {
-                  weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-                })
-              : 'Select a day'}
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-900 text-sm">
+              {selectedDate
+                ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', {
+                    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+                  })
+                : 'Select a day'}
+            </h2>
+            {/* View toggle - disabled for now
+            {selectedDate && checkins.length > 0 && (
+              <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => setDetailView('timeline')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${detailView === 'timeline' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  Timeline
+                </button>
+                <button
+                  onClick={() => setDetailView('list')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${detailView === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  <List className="w-3.5 h-3.5" />
+                  List
+                </button>
+              </div>
+            )}
+            */}
+          </div>
 
-          {selectedDate && checkinsLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-            </div>
-          ) : selectedDate && checkins.length > 0 ? (
+          {selectedDate && checkins.length > 0 ? (
             <div className="space-y-4">
-              {/* Status */}
+              {/* Summary */}
               {(() => {
-                const firstIn = checkins.find((c) => c.logType === 'IN')
-                const lastOut = [...checkins].reverse().find((c) => c.logType === 'OUT')
+                const firstIn = checkins.find((c) => c.log_type === 'IN')
+                const lastOut = [...checkins].reverse().find((c) => c.log_type === 'OUT')
                 const clockIn = firstIn ? firstIn.time.slice(11, 16) : null
                 const clockOut = lastOut ? lastOut.time.slice(11, 16) : null
-                const isComplete = clockIn != null && clockOut != null
                 return (
                   <>
-                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
-                      isComplete ? 'bg-emerald-50 text-emerald-700' : clockIn ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-500'
-                    }`}>
-                      {isComplete ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
-                      {isComplete ? 'Complete' : clockIn ? 'In progress' : 'No record'}
-                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-gray-50 rounded-xl p-3">
                         <p className="text-xs text-gray-400 mb-1">First Clock In</p>
@@ -633,7 +634,7 @@ export function ClockInOut() {
                         <p className="text-lg font-bold text-gray-900">{clockOut ?? '—'}</p>
                       </div>
                     </div>
-                    {isComplete && clockIn && clockOut && (
+                    {clockIn && clockOut && (
                       <div className="bg-blue-50 rounded-xl p-3">
                         <p className="text-xs text-blue-500 mb-1">Total Duration</p>
                         <p className="text-xl font-bold text-blue-700">{calcDuration(clockIn, clockOut)}</p>
@@ -643,21 +644,120 @@ export function ClockInOut() {
                 )
               })()}
 
-              {/* All checkin entries */}
+              {/* Timeline chart */}
+              {detailView === 'timeline' && (
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-2">All Checkins ({checkins.length})</p>
-                <div className="space-y-1.5">
-                  {checkins.map((c, i) => (
-                    <div key={`${c.time}-${i}`} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg text-sm">
-                      <div className="flex items-center gap-2">
-                        {c.logType === 'IN' ? <LogIn className="w-3.5 h-3.5 text-emerald-500" /> : <LogOut className="w-3.5 h-3.5 text-red-500" />}
-                        <span className={`font-medium ${c.logType === 'IN' ? 'text-emerald-700' : 'text-red-700'}`}>{c.logType}</span>
-                      </div>
-                      <span className="text-gray-700 tabular-nums">{c.time.slice(11, 16)}</span>
+                <p className="text-xs font-medium text-gray-500 mb-3">Timeline ({checkins.length} events)</p>
+                <div className="relative px-8">
+                  {/* Horizontal step timeline */}
+                  <div className="flex items-start">
+                    {[...checkins].sort((a, b) => a.time.localeCompare(b.time)).map((c, i, arr) => {
+                      const isIn = c.log_type === 'IN'
+                      const isLast = i === arr.length - 1
+                      return (
+                        <div key={`${c.time}-${i}`} className="flex items-start flex-1 min-w-0">
+                          {/* Node */}
+                          <div className="flex flex-col items-center">
+                            <div className={`w-4 h-4 rounded-full border-2 border-white shadow ${isIn ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                            <p className={`text-[11px] font-semibold mt-1.5 ${isIn ? 'text-emerald-700' : 'text-red-700'}`}>
+                              {c.time.slice(11, 16)}
+                            </p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{c.log_type === 'IN' ? 'In' : 'Out'}</p>
+                          </div>
+                          {/* Connector line */}
+                          {!isLast && (
+                            <div className="flex-1 flex flex-col items-center mt-[7px]">
+                              <div className={`h-0.5 w-full ${isIn ? 'bg-emerald-300' : 'bg-gray-200'}`} />
+                              {(() => {
+                                const [h1, m1] = c.time.slice(11, 16).split(':').map(Number)
+                                const next = arr[i + 1]
+                                const [h2, m2] = next.time.slice(11, 16).split(':').map(Number)
+                                const diff = (h2 * 60 + m2) - (h1 * 60 + m1)
+                                if (diff <= 0) return null
+                                const dh = Math.floor(diff / 60)
+                                const dm = diff % 60
+                                const label = dh > 0 ? `${dh}h ${dm}m` : `${dm}m`
+                                return <span className="text-[9px] text-gray-400 mt-0.5">{label}</span>
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {/* Legend */}
+                  <div className="flex items-center gap-4 mt-4 pt-3 border-t border-gray-100">
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Clock In
                     </div>
-                  ))}
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                      <div className="w-2.5 h-2.5 rounded-full bg-red-500" /> Clock Out
+                    </div>
+                  </div>
                 </div>
               </div>
+              )}
+
+              {/* Session list */}
+              {detailView === 'list' && (
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">Sessions</p>
+                <div className="space-y-2">
+                  {(() => {
+                    const sorted = [...checkins].sort((a, b) => a.time.localeCompare(b.time))
+                    const sessions: { inTime: string; outTime: string | null }[] = []
+                    let currentIn: string | null = null
+                    for (const c of sorted) {
+                      if (c.log_type === 'IN') {
+                        if (currentIn !== null) sessions.push({ inTime: currentIn, outTime: null })
+                        currentIn = c.time.slice(11, 16)
+                      } else if (c.log_type === 'OUT' && currentIn !== null) {
+                        sessions.push({ inTime: currentIn, outTime: c.time.slice(11, 16) })
+                        currentIn = null
+                      }
+                    }
+                    if (currentIn !== null) sessions.push({ inTime: currentIn, outTime: null })
+
+                    return sessions.map((s, i) => {
+                      const duration = s.outTime ? calcDuration(s.inTime, s.outTime) : null
+                      return (
+                        <div key={`session-${s.inTime}-${i}`} className="bg-gray-50 rounded-xl p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-gray-700">Session {i + 1}</span>
+                            {duration ? (
+                              <span className="text-xs font-semibold text-emerald-600">{duration}</span>
+                            ) : (
+                              <span className="text-xs font-medium text-amber-500">In progress</span>
+                            )}
+                          </div>
+                          {/* Mini session timeline */}
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                              <span className="text-sm font-medium text-emerald-700 tabular-nums">{s.inTime}</span>
+                            </div>
+                            <div className="flex-1 border-t border-dashed border-gray-300" />
+                            <div className="flex items-center gap-1.5">
+                              {s.outTime ? (
+                                <>
+                                  <span className="text-sm font-medium text-red-700 tabular-nums">{s.outTime}</span>
+                                  <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-sm font-medium text-amber-600">now</span>
+                                  <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+              </div>
+              )}
             </div>
           ) : selectedDate ? (
             <div className="flex flex-col items-center justify-center flex-1 py-8 text-center">

@@ -103,6 +103,7 @@ export async function getAllLeaves(): Promise<LeaveListItem[]> {
       'description',
       'posting_date',
       'half_day',
+      'workflow_state',
     ]),
     limit_page_length: '0',
     order_by: 'posting_date desc',
@@ -226,4 +227,101 @@ export async function getMyHolidays(year: number): Promise<Holiday[]> {
       weeklyOff: h.weekly_off === 1,
     }))
     .sort((a, b) => (a.date < b.date ? -1 : 1))
+}
+
+export async function cancelLeaveRequest(leaveId: string): Promise<void> {
+  // Frappe workflow: to cancel a submitted doc we first call amend_cancel
+  // But for Leave Application with status Open, we can just update status to Cancelled
+  const res = await http(`${FRAPPE_BASE}/api/resource/Leave Application/${leaveId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ status: 'Cancelled', docstatus: 2 }),
+  })
+  const data = (await res.json()) as { exc?: string; _server_messages?: string }
+  if (!res.ok) {
+    throw new Error(data.exc ?? data._server_messages ?? 'Failed to cancel leave request.')
+  }
+}
+
+export async function approveLeaveRequest(leaveId: string): Promise<void> {
+  const res = await http(`${FRAPPE_BASE}/api/resource/Leave Application/${leaveId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ status: 'Approved' }),
+  })
+  const data = (await res.json()) as { exc?: string; _server_messages?: string }
+  if (!res.ok) {
+    throw new Error(data.exc ?? data._server_messages ?? 'Failed to approve leave request.')
+  }
+}
+
+export async function rejectLeaveRequest(leaveId: string): Promise<void> {
+  const res = await http(`${FRAPPE_BASE}/api/resource/Leave Application/${leaveId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ status: 'Rejected' }),
+  })
+  const data = (await res.json()) as { exc?: string; _server_messages?: string }
+  if (!res.ok) {
+    throw new Error(data.exc ?? data._server_messages ?? 'Failed to reject leave request.')
+  }
+}
+
+export interface LeaveActivityLog {
+  date: string
+  user: string
+  action: string
+  detail: string
+}
+
+export async function getLeaveActivityLog(leaveId: string): Promise<LeaveActivityLog[]> {
+  const logs: LeaveActivityLog[] = []
+
+  // Fetch Version (track_changes) entries
+  const vParams = new URLSearchParams({
+    doctype: 'Version',
+    fields: JSON.stringify(['creation', 'owner', 'data']),
+    filters: JSON.stringify([['ref_doctype', '=', 'Leave Application'], ['docname', '=', leaveId]]),
+    limit_page_length: '0',
+    order_by: 'creation asc',
+  })
+  const vRes = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${vParams}`)
+  const vData = (await vRes.json()) as { message?: { creation: string; owner: string; data: string }[] }
+  for (const v of vData.message ?? []) {
+    try {
+      const parsed = JSON.parse(v.data) as { changed?: [string, unknown, unknown][] }
+      for (const [field, oldVal, newVal] of parsed.changed ?? []) {
+        if (field === 'status') {
+          logs.push({
+            date: v.creation,
+            user: v.owner,
+            action: String(newVal),
+            detail: `Status changed from ${String(oldVal)} to ${String(newVal)}`,
+          })
+        }
+      }
+    } catch { /* skip unparseable */ }
+  }
+
+  // Fetch Comment entries
+  const cParams = new URLSearchParams({
+    doctype: 'Comment',
+    fields: JSON.stringify(['creation', 'owner', 'comment_type', 'content']),
+    filters: JSON.stringify([['reference_doctype', '=', 'Leave Application'], ['reference_name', '=', leaveId], ['comment_type', 'in', ['Comment', 'Workflow', 'Like']]]),
+    limit_page_length: '0',
+    order_by: 'creation asc',
+  })
+  const cRes = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${cParams}`)
+  const cData = (await cRes.json()) as { message?: { creation: string; owner: string; comment_type: string; content: string }[] }
+  for (const c of cData.message ?? []) {
+    logs.push({
+      date: c.creation,
+      user: c.owner,
+      action: c.comment_type,
+      detail: c.content?.replace(/<[^>]*>/g, '') || c.comment_type,
+    })
+  }
+
+  logs.sort((a, b) => a.date.localeCompare(b.date))
+  return logs
 }

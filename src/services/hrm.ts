@@ -324,6 +324,38 @@ export async function getEmployeeCheckins(date: string): Promise<EmployeeCheckin
   return data.message ?? []
 }
 
+export async function getMonthlyCheckins(year: number, month: number): Promise<EmployeeCheckinRecord[]> {
+  let employeeId: string
+  try {
+    employeeId = await getCurrentEmployeeId()
+  } catch {
+    return []
+  }
+
+  const mm = String(month + 1).padStart(2, '0')
+  const lastDay = new Date(year, month + 1, 0).getDate()
+  const startTime = `${year}-${mm}-01 00:00:00`
+  const endTime = `${year}-${mm}-${String(lastDay).padStart(2, '0')} 23:59:59`
+
+  const params = new URLSearchParams({
+    doctype: 'Employee Checkin',
+    fields: JSON.stringify(['name', 'employee', 'employee_name', 'log_type', 'time']),
+    filters: JSON.stringify([
+      ['employee', '=', employeeId],
+      ['time', '>=', startTime],
+      ['time', '<=', endTime],
+    ]),
+    order_by: 'time asc',
+    limit_page_length: '0',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<EmployeeCheckinRecord>
+  if (!res.ok || data.exc) {
+    throw new Error(data.exc ?? 'Failed to fetch monthly checkins.')
+  }
+  return data.message ?? []
+}
+
 // ── Resignation ──────────────────────────────────────────────────────
 
 interface CreateResignationInput {

@@ -13,6 +13,7 @@ export interface LeaveListItem {
   description: string
   postingDate: string
   halfDay: boolean
+  workflowState: string
 }
 
 export interface MyLeave {

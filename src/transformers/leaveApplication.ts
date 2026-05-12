@@ -18,6 +18,7 @@ export interface FrappeLeaveApplication {
 export interface FrappeLeaveListItem extends FrappeLeaveApplication {
   employee_name?: string
   department?: string
+  workflow_state?: string
 }
 
 const STATUS_VALUES: LeaveApplicationStatus[] = ['Open', 'Approved', 'Rejected', 'Cancelled']
@@ -71,5 +72,6 @@ export function decodeLeaveListItem(f: FrappeLeaveListItem): LeaveListItem {
     description: f.description ?? '',
     postingDate: f.posting_date ?? '',
     halfDay: f.half_day === 1,
+    workflowState: f.workflow_state ?? '',
   }
 }

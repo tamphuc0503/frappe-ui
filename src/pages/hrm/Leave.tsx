@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { Plus, Check, X, CalendarDays, CalendarCheck, CalendarX, Clock, RefreshCw, Search } from 'lucide-react'
+import { Plus, Check, X, CalendarDays, CalendarCheck, CalendarX, Clock, RefreshCw, Search, Activity, Loader2 } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { LeaveRequestDialog } from '../../components/ui/LeaveRequestDialog'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { useFetchOnce } from '../../hooks/useFetchOnce'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
-import { getAllLeaves } from '../../services/leaves'
+import { getAllLeaves, approveLeaveRequest, rejectLeaveRequest, getLeaveActivityLog } from '../../services/leaves'
 import type { LeaveListItem, LeaveApplicationStatus } from '../../types/leave'
+import type { LeaveActivityLog } from '../../services/leaves'
 
 const STATUS_VARIANT: Record<LeaveApplicationStatus, 'gray' | 'green' | 'red' | 'yellow'> = {
   Open: 'yellow',
@@ -19,8 +20,15 @@ const STATUS_VARIANT: Record<LeaveApplicationStatus, 'gray' | 'green' | 'red' | 
 function formatDate(iso: string): string {
   if (!iso) return '—'
   const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
+  if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function formatDateTime(iso: string): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
 function formatDays(n: number): string {
@@ -45,6 +53,25 @@ const COLOR_MAP: Record<CardColor, { bg: string; text: string }> = {
   red:     { bg: 'bg-red-50',     text: 'text-red-600' },
 }
 
+function ActivityLogList({ logs }: Readonly<{ logs: LeaveActivityLog[] }>) {
+  if (logs.length === 0) return <p className="text-sm text-gray-400 py-2">No activity recorded.</p>
+  return (
+    <div className="space-y-0 border-l-2 border-gray-200 ml-1.5 max-h-48 overflow-y-auto">
+      {logs.map((log) => (
+        <div key={`${log.date}-${log.action}`} className="pl-4 pb-3 relative">
+          <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-gray-300" />
+          <p className="text-xs text-gray-500">
+            {formatDateTime(log.date)}
+            <span className="mx-1.5">·</span>
+            <span className="font-medium text-gray-700">{log.user}</span>
+          </p>
+          <p className="text-sm text-gray-700 mt-0.5">{log.detail}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function Leave() {
   const pageLoading = usePageLoad()
   const [filter, setFilter] = useState<FilterKey>('All')
@@ -57,6 +84,20 @@ export function Leave() {
   const [dateRange, setDateRange] = useState<'all' | 'week' | 'month' | 'custom'>('all')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [selectedLeave, setSelectedLeave] = useState<LeaveListItem | null>(null)
+  const [activityLogs, setActivityLogs] = useState<LeaveActivityLog[]>([])
+  const [activityLoading, setActivityLoading] = useState(false)
+
+  function openLeaveDetail(leave: LeaveListItem) {
+    setSelectedLeave(leave)
+    setActivityLogs([])
+    setActivityLoading(true)
+    getLeaveActivityLog(leave.id)
+      .then(setActivityLogs)
+      .catch(() => { /* ignore */ })
+      .finally(() => setActivityLoading(false))
+  }
 
   async function load(showSpinner: boolean) {
     if (showSpinner) setRefreshing(true)
@@ -75,6 +116,19 @@ export function Leave() {
   useFetchOnce(() => { void load(false) })
 
   if (pageLoading || loading) return <><SkPageHeader /><SkTable rows={8} cols={7} hasToolbar /></>
+
+  async function handleAction(id: string, action: 'approve' | 'reject') {
+    setActionLoading(id)
+    try {
+      if (action === 'approve') await approveLeaveRequest(id)
+      else await rejectLeaveRequest(id)
+      await load(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to ${action} leave request.`)
+    } finally {
+      setActionLoading(null)
+    }
+  }
 
   const dateFiltered = (() => {
     if (dateRange === 'all') return leaves
@@ -241,12 +295,17 @@ export function Leave() {
                     <th className="table-th">To</th>
                     <th className="table-th text-right">Days</th>
                     <th className="table-th">Status</th>
+                    <th className="table-th">Workflow</th>
                     <th className="table-th">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {displayed.map((req) => (
-                    <tr key={req.id} className="hover:bg-gray-50/60 transition-colors">
+                    <tr
+                      key={req.id}
+                      onClick={() => openLeaveDetail(req)}
+                      className="hover:bg-blue-50/60 transition-colors cursor-pointer"
+                    >
                       <td className="table-td">
                         <p className="font-medium text-gray-900 text-sm">{req.employeeName || req.employeeId}</p>
                         {req.department && <p className="text-xs text-gray-400">{req.department}</p>}
@@ -261,15 +320,28 @@ export function Leave() {
                       <td className="table-td">
                         <Badge variant={STATUS_VARIANT[req.status]}>{req.status}</Badge>
                       </td>
+                      <td className="table-td text-sm text-gray-500">{req.workflowState || '—'}</td>
                       <td className="table-td">
                         <div className="flex items-center gap-1.5">
                           {req.status === 'Open' && (
                             <>
-                              <button className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Approve" aria-label="Approve">
-                                <Check className="w-4 h-4" />
+                              <button
+                                onClick={(e) => { e.stopPropagation(); void handleAction(req.id, 'approve') }}
+                                disabled={actionLoading === req.id}
+                                className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Approve"
+                                aria-label="Approve"
+                              >
+                                <Check className={`w-4 h-4 ${actionLoading === req.id ? 'animate-pulse' : ''}`} />
                               </button>
-                              <button className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Reject" aria-label="Reject">
-                                <X className="w-4 h-4" />
+                              <button
+                                onClick={(e) => { e.stopPropagation(); void handleAction(req.id, 'reject') }}
+                                disabled={actionLoading === req.id}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Reject"
+                                aria-label="Reject"
+                              >
+                                <X className={`w-4 h-4 ${actionLoading === req.id ? 'animate-pulse' : ''}`} />
                               </button>
                             </>
                           )}
@@ -283,6 +355,104 @@ export function Leave() {
           </div>
         )}
       </div>
+
+      {/* Leave Detail Dialog */}
+      {selectedLeave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-[fadeIn_200ms_ease-out]" onClick={() => setSelectedLeave(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden animate-[scaleIn_250ms_ease-out]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">Leave Request Details</h2>
+              <button onClick={() => setSelectedLeave(null)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500">Status</span>
+                <Badge variant={STATUS_VARIANT[selectedLeave.status]}>{selectedLeave.status}</Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">Employee</p>
+                  <p className="text-sm font-medium text-gray-900">{selectedLeave.employeeName || selectedLeave.employeeId}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">Department</p>
+                  <p className="text-sm text-gray-700">{selectedLeave.department || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">Leave Type</p>
+                  <p className="text-sm text-gray-700">{selectedLeave.leaveType}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">Total Days</p>
+                  <p className="text-sm text-gray-700">{formatDays(selectedLeave.totalDays)}{selectedLeave.halfDay ? ' (Half Day)' : ''}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">From</p>
+                  <p className="text-sm text-gray-700">{formatDate(selectedLeave.fromDate)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">To</p>
+                  <p className="text-sm text-gray-700">{formatDate(selectedLeave.toDate)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">Posting Date</p>
+                  <p className="text-sm text-gray-700">{formatDate(selectedLeave.postingDate)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">Workflow State</p>
+                  <p className="text-sm text-gray-700">{selectedLeave.workflowState || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">Request ID</p>
+                  <p className="text-sm text-gray-500 font-mono">{selectedLeave.id}</p>
+                </div>
+              </div>
+              {selectedLeave.description && (
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">Description / Reason</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 rounded-lg p-3">{selectedLeave.description}</p>
+                </div>
+              )}
+
+              {/* Activity Log */}
+              <div>
+                <p className="text-xs text-gray-400 mb-2 flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5" />
+                  Activity Log
+                </p>
+                {activityLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-400 py-3">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading activity…
+                  </div>
+                ) : (
+                  <ActivityLogList logs={activityLogs} />
+                )}
+              </div>
+            </div>
+            {selectedLeave.status === 'Open' && (
+              <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/60">
+                <button
+                  onClick={() => { void handleAction(selectedLeave.id, 'approve'); setSelectedLeave(null) }}
+                  disabled={actionLoading === selectedLeave.id}
+                  className="flex-1 btn-primary flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  <Check className="w-4 h-4" /> Approve
+                </button>
+                <button
+                  onClick={() => { void handleAction(selectedLeave.id, 'reject'); setSelectedLeave(null) }}
+                  disabled={actionLoading === selectedLeave.id}
+                  className="flex-1 btn-primary flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50"
+                >
+                  <X className="w-4 h-4" /> Reject
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {showRequestDialog && (
         <LeaveRequestDialog

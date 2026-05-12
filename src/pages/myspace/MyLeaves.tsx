@@ -6,7 +6,7 @@ import { LeaveRequestDialog } from '../../components/ui/LeaveRequestDialog'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { useFetchOnce } from '../../hooks/useFetchOnce'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
-import { getMyLeaves, getMyLeaveSummary, getMyHolidays } from '../../services/leaves'
+import { getMyLeaves, getMyLeaveSummary, getMyHolidays, cancelLeaveRequest } from '../../services/leaves'
 import type { MyLeave, LeaveApplicationStatus, LeaveSummary, Holiday } from '../../types/leave'
 
 const STATUS_VARIANT: Record<LeaveApplicationStatus, 'gray' | 'green' | 'red' | 'yellow'> = {
@@ -41,6 +41,19 @@ export function MyLeaves() {
   const [showRequestDialog, setShowRequestDialog] = useState(false)
   const [showHolidayModal, setShowHolidayModal] = useState(false)
   const [showBalanceModal, setShowBalanceModal] = useState(false)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
+
+  async function handleCancel(leaveId: string) {
+    setCancellingId(leaveId)
+    try {
+      await cancelLeaveRequest(leaveId)
+      void load(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel leave request.')
+    } finally {
+      setCancellingId(null)
+    }
+  }
 
   async function load(showSpinner: boolean) {
     if (showSpinner) setRefreshing(true)
@@ -159,6 +172,7 @@ export function MyLeaves() {
                     <th className="table-th text-right">Days</th>
                     <th className="table-th">Posted</th>
                     <th className="table-th">Status</th>
+                    <th className="table-th text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -181,6 +195,18 @@ export function MyLeaves() {
                       <td className="table-td text-sm text-gray-500">{formatDate(l.postingDate)}</td>
                       <td className="table-td">
                         <Badge variant={STATUS_VARIANT[l.status]}>{l.status}</Badge>
+                      </td>
+                      <td className="table-td text-right">
+                        {l.status === 'Open' && (
+                          <button
+                            type="button"
+                            onClick={() => void handleCancel(l.id)}
+                            disabled={cancellingId === l.id}
+                            className="text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {cancellingId === l.id ? 'Cancelling…' : 'Cancel'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
