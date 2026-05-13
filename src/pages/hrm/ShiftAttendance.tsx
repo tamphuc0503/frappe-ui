@@ -1,31 +1,65 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Calendar, Clock, Download, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { Sk, SkPageHeader, SkStatCards, SkTable, SkWeekBar } from '../../components/ui/Skeleton'
+import { getAttendanceRecords } from '../../services/hrm'
 import type { AttendanceStatus, AttendanceRecord } from '../../types/hrm'
 
-const attendanceData: AttendanceRecord[] = [
-  { id: 1, employee: 'Sarah Johnson', department: 'HR', date: '2026-05-08', checkIn: '08:02', checkOut: '17:05', hours: 9.05, status: 'Present' },
-  { id: 2, employee: 'Marcus Chen', department: 'Technology', date: '2026-05-08', checkIn: '09:14', checkOut: '18:30', hours: 9.27, status: 'Late' },
-  { id: 3, employee: 'Linda Park', department: 'Operations', date: '2026-05-08', checkIn: '08:00', checkOut: '17:00', hours: 9.0, status: 'Present' },
-  { id: 4, employee: 'Tom Rivera', department: 'Finance', date: '2026-05-08', checkIn: '—', checkOut: '—', hours: 0, status: 'Absent' },
-  { id: 5, employee: 'Grace Nwosu', department: 'Sales', date: '2026-05-08', checkIn: '08:05', checkOut: '12:30', hours: 4.42, status: 'Half Day' },
-  { id: 6, employee: 'Carlos Mendez', department: 'Operations', date: '2026-05-08', checkIn: '07:58', checkOut: '16:55', hours: 8.95, status: 'Present' },
-  { id: 7, employee: 'Rachel Wong', department: 'Sales', date: '2026-05-08', checkIn: '08:45', checkOut: '18:00', hours: 9.25, status: 'Late' },
-  { id: 8, employee: 'David Kim', department: 'Technology', date: '2026-05-08', checkIn: '08:01', checkOut: '17:02', hours: 9.02, status: 'Present' },
-]
+/* ── date helpers ──────────────────────────────────────────────────────────── */
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-const weekSummary = [
-  { day: 'Mon', date: '05', present: 7, absent: 1 },
-  { day: 'Tue', date: '06', present: 8, absent: 0 },
-  { day: 'Wed', date: '07', present: 6, absent: 2 },
-  { day: 'Thu', date: '08', present: 6, absent: 1 },
-  { day: 'Fri', date: '09', present: 0, absent: 0 },
-  { day: 'Sat', date: '10', present: 0, absent: 0 },
-  { day: 'Sun', date: '11', present: 0, absent: 0 },
-]
+function fmt(d: Date) {
+  return d.toISOString().slice(0, 10)
+}
+
+/** Monday of the week containing `d` */
+function weekStart(d: Date) {
+  const copy = new Date(d)
+  const day = copy.getDay() // 0=Sun
+  copy.setDate(copy.getDate() - ((day + 6) % 7))
+  return copy
+}
+
+/** Build an array of 7 days (Mon–Sun) for the week containing `d` */
+function weekDays(d: Date) {
+  const mon = weekStart(d)
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(mon)
+    day.setDate(mon.getDate() + i)
+    return day
+  })
+}
+
+interface WeekDay {
+  day: string
+  date: string
+  fullDate: string
+  present: number
+  absent: number
+}
+
+function buildWeekSummary(today: Date, records: AttendanceRecord[]): WeekDay[] {
+  const days = weekDays(today)
+  const byDate = new Map<string, { present: number; absent: number }>()
+  for (const r of records) {
+    const e = byDate.get(r.date) ?? { present: 0, absent: 0 }
+    if (r.status === 'Absent') e.absent++
+    else e.present++
+    byDate.set(r.date, e)
+  }
+  return days.map((d) => {
+    const full = fmt(d)
+    const counts = byDate.get(full) ?? { present: 0, absent: 0 }
+    return {
+      day: DAY_NAMES[d.getDay()],
+      date: String(d.getDate()).padStart(2, '0'),
+      fullDate: full,
+      ...counts,
+    }
+  })
+}
 
 function statusBadge(s: AttendanceStatus) {
   if (s === 'Present') return <Badge variant="green">Present</Badge>
@@ -43,6 +77,23 @@ function statusIcon(s: AttendanceStatus) {
 export function ShiftAttendance() {
   const loading = usePageLoad()
   const [view, setView] = useState<'Today' | 'This Week'>('Today')
+  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([])
+
+  const today = new Date()
+  const todayStr = fmt(today)
+  const monday = weekStart(today)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+
+  useEffect(() => {
+    const from = view === 'Today' ? todayStr : fmt(monday)
+    const to = view === 'Today' ? todayStr : fmt(sunday)
+    getAttendanceRecords(from, to)
+      .then(setAttendanceData)
+      .catch((e) => console.error('[attendance]', e))
+  }, [view]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const weekSummary = buildWeekSummary(today, attendanceData)
   if (loading) return (
     <div>
       <SkPageHeader hasAction />

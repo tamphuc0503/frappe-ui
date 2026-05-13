@@ -8,6 +8,7 @@ import { usePageLoad } from '../../hooks/usePageLoad'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
 import { getEmployees, createEmployee, createResignation, getDepartments, getDesignations, getGenders, type LookupOption } from '../../services/hrm'
 import type { Employee } from '../../types/hrm'
+import { createUserPermission } from '../../services/permissions'
 import { LeaveRequestDialog } from '../../components/ui/LeaveRequestDialog'
 import {
   FormFields,
@@ -83,6 +84,13 @@ function AddEmployeeDialog({ options, onClose, onSave }: AddEmployeeDialogProps)
         status: form.status,
         joinDate: form.joinDate,
       })
+
+      // Create user permission for the employee's department
+      if (form.department && form.email) {
+        await createUserPermission(form.email.trim(), 'Department', form.department)
+          .catch((err) => console.error('[Employee] createUserPermission error:', err))
+      }
+
       onSave(newEmployee)
       onClose()
     } catch (err) {
@@ -201,76 +209,44 @@ export function Employee() {
   const [departments, setDepartments] = useState<LookupOption[]>([])
   const [designations, setDesignations] = useState<LookupOption[]>([])
   const [genders, setGenders] = useState<LookupOption[]>([])
-  const [loadingDepartments, setLoadingDepartments] = useState(false)
-  const [loadingDesignations, setLoadingDesignations] = useState(false)
-  const [loadingGenders, setLoadingGenders] = useState(false)
-  const startedDeptRef = useRef(false)
-  const startedDesigRef = useRef(false)
-  const startedGenderRef = useRef(false)
-  const mountedRef = useRef(true)
-  useEffect(() => () => { mountedRef.current = false }, [])
+  const [loadingDepartments, setLoadingDepartments] = useState(true)
+  const [loadingDesignations, setLoadingDesignations] = useState(true)
+  const [loadingGenders, setLoadingGenders] = useState(true)
 
   useFetchOnce(() => {
     getEmployees()
       .then((data) => { setEmployeeList(data); setError(null) })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load employees.'))
       .finally(() => setFetchLoading(false))
+
+    getDepartments()
+      .then((data) => setDepartments(data))
+      .catch((err) => console.error('[Employee] getDepartments error:', err))
+      .finally(() => setLoadingDepartments(false))
+
+    getDesignations()
+      .then((data) => setDesignations(data))
+      .catch((err) => console.error('[Employee] getDesignations error:', err))
+      .finally(() => setLoadingDesignations(false))
+
+    getGenders()
+      .then((data) => setGenders(data))
+      .catch((err) => console.error('[Employee] getGenders error:', err))
+      .finally(() => setLoadingGenders(false))
   })
 
   function refreshEmployees() {
     if (refreshing) return
     setRefreshing(true)
     getEmployees()
-      .then((data) => { if (mountedRef.current) { setEmployeeList(data); setError(null) } })
-      .catch((err) => { if (mountedRef.current) setError(err instanceof Error ? err.message : 'Failed to load employees.') })
-      .finally(() => { if (mountedRef.current) setRefreshing(false) })
-  }
-
-  function loadDepartments() {
-    if (startedDeptRef.current) return
-    startedDeptRef.current = true
-    setLoadingDepartments(true)
-    getDepartments()
-      .then((data) => {
-        console.info('[Employee] getDepartments resolved:', data, 'type:', Array.isArray(data) ? `string[${data.length}]` : typeof data)
-        if (mountedRef.current) setDepartments(data)
-      })
-      .catch((err) => { console.error('[Employee] getDepartments error:', err); startedDeptRef.current = false })
-      .finally(() => { if (mountedRef.current) setLoadingDepartments(false) })
-  }
-
-  function loadDesignations() {
-    if (startedDesigRef.current) return
-    startedDesigRef.current = true
-    setLoadingDesignations(true)
-    getDesignations()
-      .then((data) => {
-        console.info('[Employee] getDesignations resolved:', data)
-        if (mountedRef.current) setDesignations(data)
-      })
-      .catch((err) => { console.error('[Employee] getDesignations error:', err); startedDesigRef.current = false })
-      .finally(() => { if (mountedRef.current) setLoadingDesignations(false) })
-  }
-
-  function loadGenders() {
-    if (startedGenderRef.current) return
-    startedGenderRef.current = true
-    setLoadingGenders(true)
-    getGenders()
-      .then((data) => {
-        console.info('[Employee] getGenders resolved:', data)
-        if (mountedRef.current) setGenders(data)
-      })
-      .catch((err) => { console.error('[Employee] getGenders error:', err); startedGenderRef.current = false })
-      .finally(() => { if (mountedRef.current) setLoadingGenders(false) })
+      .then((data) => { setEmployeeList(data); setError(null) })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load employees.'))
+      .finally(() => setRefreshing(false))
   }
 
   const dropdownOptions: DropdownOptions = {
     departments, designations, genders,
     loadingDepartments, loadingDesignations, loadingGenders,
-    onOpenDepartments: loadDepartments,
-    onOpenDesignations: loadDesignations,
-    onOpenGenders: loadGenders,
   }
 
   const loading = pageLoading || fetchLoading

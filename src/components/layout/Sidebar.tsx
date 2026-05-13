@@ -68,7 +68,6 @@ const navItems: NavItem[] = [
       { label: 'My Assets', icon: <FolderOpen className="w-4 h-4" />, path: '/my-space/assets' },
       { label: 'My Leaves', icon: <CalendarOff className="w-4 h-4" />, path: '/my-space/leaves' },
       { label: 'My Payslips', icon: <Receipt className="w-4 h-4" />, path: '/my-space/payslips' },
-      { label: 'Request New Member', icon: <UserPlus className="w-4 h-4" />, path: '/my-space/request-new-member' },
     ],
   },
   {

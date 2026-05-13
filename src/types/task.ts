@@ -1,23 +1,29 @@
-export type TaskStatus = 'Open' | 'Working' | 'Pending Review' | 'Overdue' | 'Completed' | 'Cancelled'
-export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent'
+export type TodoStatus = 'Open' | 'In Progress' | 'Closed' | 'Cancelled'
+export type TodoPriority = 'Low' | 'Medium' | 'High'
 
-export interface Task {
+export interface Todo {
   id: string
-  subject: string
-  status: TaskStatus
-  priority: TaskPriority
   description: string
-  project: string
-  startDate: string
-  endDate: string
-  progress: number
-  assignees: string[]
+  status: TodoStatus
+  priority: TodoPriority
+  date: string
+  referenceType: string
+  referenceName: string
+  assignedBy: string
+  allocatedTo: string
+  color: string
 }
 
-export interface TaskKanbanColumn {
-  key: TaskStatus
+export interface TodoKanbanColumn {
+  key: TodoStatus
   label: string
   color: string
   headerColor: string
-  tasks: Task[]
+  todos: Todo[]
 }
+
+// Legacy aliases
+export type TaskStatus = 'Open' | 'Working' | 'Pending Review' | 'Overdue' | 'Completed' | 'Cancelled'
+export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent'
+export type Task = Todo
+export type TaskKanbanColumn = TodoKanbanColumn

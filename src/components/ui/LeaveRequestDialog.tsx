@@ -51,7 +51,7 @@ export function LeaveRequestDialog({ onClose, onSubmit, employeeId }: LeaveReque
 
   useFetchOnce(() => {
     setLoadingTypes(true)
-    getLeaveTypes()
+    getLeaveTypes(employeeId)
       .then((data) => { setLeaveTypes(data); setTypeError(null) })
       .catch((err) => setTypeError(err instanceof Error ? err.message : 'Failed to load leave types.'))
       .finally(() => setLoadingTypes(false))

@@ -5,6 +5,7 @@ import { Badge } from '../../components/ui/Badge'
 import { LeaveRequestDialog } from '../../components/ui/LeaveRequestDialog'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { useFetchOnce } from '../../hooks/useFetchOnce'
+import { useToast } from '../../hooks/useToast'
 import { SkPageHeader, SkTable } from '../../components/ui/Skeleton'
 import { getAllLeaves, approveLeaveRequest, rejectLeaveRequest, getLeaveActivityLog } from '../../services/leaves'
 import type { LeaveListItem, LeaveApplicationStatus } from '../../types/leave'
@@ -88,6 +89,7 @@ export function Leave() {
   const [selectedLeave, setSelectedLeave] = useState<LeaveListItem | null>(null)
   const [activityLogs, setActivityLogs] = useState<LeaveActivityLog[]>([])
   const [activityLoading, setActivityLoading] = useState(false)
+  const { addToast } = useToast()
 
   function openLeaveDetail(leave: LeaveListItem) {
     setSelectedLeave(leave)
@@ -124,7 +126,8 @@ export function Leave() {
       else await rejectLeaveRequest(id)
       await load(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : `Failed to ${action} leave request.`)
+      const msg = err instanceof Error ? err.message : `Failed to ${action} leave request.`
+      addToast(msg, 'error')
     } finally {
       setActionLoading(null)
     }

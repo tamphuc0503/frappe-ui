@@ -2,7 +2,7 @@ import { http, FRAPPE_BASE } from './http'
 import { getCompanyCache } from './company'
 import { getUserCache } from './auth'
 import { createUser } from './users'
-import type { Employee } from '../types/hrm'
+import type { Employee, AttendanceRecord, AttendanceStatus } from '../types/hrm'
 import {
   employeeCodec,
   toFrappeEmployeeDoc,
@@ -31,7 +31,6 @@ interface InsertResponse<T = unknown> {
 export interface LookupOption {
   value: string
   label: string
-  id?: string
 }
 
 // Frappe's get_list returns rows like `{name: <key>, <display_field>: <label>}`.
@@ -39,12 +38,13 @@ export interface LookupOption {
 // fields); the display field is what we show to the user. They are not always
 // the same — e.g. Department has `name='HR-001'`, `department_name='Human Resources'`.
 function parseObjectRow(r: Record<string, unknown>, labelKey: string): LookupOption | null {
-  const key = typeof r.name === 'string' ? r.name : ''
+  let key = ''
+  if (typeof r.name === 'string') key = r.name
+  else if (typeof r.id === 'string') key = r.id
   if (!key) return null
   const rawLabel = r[labelKey]
   const lbl = typeof rawLabel === 'string' && rawLabel.length > 0 ? rawLabel : key
-  const id = typeof r.id === 'string' && r.id.length > 0 ? r.id : undefined
-  return { value: key, label: lbl, id }
+  return { value: key, label: lbl }
 }
 
 function toLookupOptions(rows: unknown, labelKey: string): LookupOption[] {
@@ -63,7 +63,7 @@ function toLookupOptions(rows: unknown, labelKey: string): LookupOption[] {
 export async function getDepartments(): Promise<LookupOption[]> {
   const params = new URLSearchParams({
     doctype: 'Department',
-    fields: JSON.stringify(['id', 'name', 'department_name']),
+    fields: JSON.stringify(['*']),
     limit_page_length: '0',
   })
   const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
@@ -71,13 +71,14 @@ export async function getDepartments(): Promise<LookupOption[]> {
   if (!res.ok || data.exc) {
     throw new Error(data.exc ?? 'Failed to fetch departments.')
   }
+  console.debug('[hrm] getDepartments raw:', data.message)
   return toLookupOptions(data.message, 'department_name')
 }
 
 export async function getDesignations(): Promise<LookupOption[]> {
   const params = new URLSearchParams({
     doctype: 'Designation',
-    fields: JSON.stringify(['name', 'designation_name']),
+    fields: JSON.stringify(['*']),
     limit_page_length: '0',
   })
   const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
@@ -91,7 +92,7 @@ export async function getDesignations(): Promise<LookupOption[]> {
 export async function getGenders(): Promise<LookupOption[]> {
   const params = new URLSearchParams({
     doctype: 'Gender',
-    fields: JSON.stringify(['name', 'gender']),
+    fields: JSON.stringify(['*']),
     limit_page_length: '0',
   })
   const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
@@ -382,4 +383,75 @@ export async function createResignation(input: CreateResignationInput): Promise<
   if (!res.ok) {
     throw new Error(data.exc ?? data._server_messages ?? 'Failed to submit resignation.')
   }
+}
+
+/* ── Attendance ─────────────────────────────────────────────────────────────── */
+
+interface FrappeAttendance {
+  name: string
+  employee: string
+  employee_name: string
+  department: string
+  attendance_date: string
+  status: string // Present, Absent, Half Day, Work From Home
+  early_exit?: number
+  late_entry?: number
+  working_hours?: number
+}
+
+function mapAttendanceStatus(s: string, lateEntry?: number): AttendanceStatus {
+  if (s === 'Absent') return 'Absent'
+  if (s === 'Half Day') return 'Half Day'
+  if (lateEntry) return 'Late'
+  return 'Present'
+}
+
+export async function getAttendanceRecords(
+  fromDate: string,
+  toDate: string,
+): Promise<AttendanceRecord[]> {
+  const params = new URLSearchParams({
+    doctype: 'Attendance',
+    fields: JSON.stringify([
+      'name', 'employee', 'employee_name', 'department',
+      'attendance_date', 'status', 'late_entry', 'early_exit', 'working_hours',
+    ]),
+    filters: JSON.stringify([
+      ['attendance_date', '>=', fromDate],
+      ['attendance_date', '<=', toDate],
+    ]),
+    order_by: 'attendance_date desc',
+    limit_page_length: '0',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<FrappeAttendance>
+  if (!res.ok || data.exc) {
+    throw new Error(data.exc ?? 'Failed to fetch attendance records.')
+  }
+  const rows = data.message ?? []
+  return rows.map((r, i) => ({
+    id: i + 1,
+    employee: r.employee_name || r.employee,
+    department: r.department || '',
+    date: r.attendance_date,
+    checkIn: '—',
+    checkOut: '—',
+    hours: r.working_hours ?? 0,
+    status: mapAttendanceStatus(r.status, r.late_entry),
+  }))
+}
+
+export async function getWeekAttendanceSummary(
+  fromDate: string,
+  toDate: string,
+): Promise<{ date: string; present: number; absent: number }[]> {
+  const records = await getAttendanceRecords(fromDate, toDate)
+  const byDate = new Map<string, { present: number; absent: number }>()
+  for (const r of records) {
+    const entry = byDate.get(r.date) ?? { present: 0, absent: 0 }
+    if (r.status === 'Absent') entry.absent++
+    else entry.present++
+    byDate.set(r.date, entry)
+  }
+  return Array.from(byDate.entries()).map(([date, counts]) => ({ date, ...counts }))
 }

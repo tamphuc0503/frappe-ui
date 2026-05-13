@@ -3,6 +3,28 @@ import { getMyEmployeeId } from './hrm'
 import type { MyLeave, LeaveSummary, LeaveBalance, Holiday, LeaveRequestPayload, LeaveListItem } from '../types/leave'
 import { leaveApplicationCodec, decodeLeaveListItem, type FrappeLeaveApplication, type FrappeLeaveListItem } from '../transformers/leaveApplication'
 
+// ─── Workflow State & Action Constants ───────────────────────────────────────
+
+export const LeaveRequestWorkflowState = {
+  PENDING_MANAGER: 'Pending Manager',
+  PENDING_HR: 'Pending HR',
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected',
+  CANCELLED: 'Cancelled',
+  OPEN: 'Open',
+} as const
+
+export type LeaveRequestWorkflowStateValue = (typeof LeaveRequestWorkflowState)[keyof typeof LeaveRequestWorkflowState]
+
+export const LeaveRequestWorkflowAction = {
+  APPROVE: 'Approve',
+  REJECT: 'Reject',
+} as const
+
+export type LeaveRequestWorkflowActionValue = (typeof LeaveRequestWorkflowAction)[keyof typeof LeaveRequestWorkflowAction]
+
+// ─── Interfaces ──────────────────────────────────────────────────────────────
+
 interface GetListResponse<T> {
   message?: T[]
   exc?: string
@@ -18,7 +40,34 @@ export interface LeaveTypeOption {
   label: string
 }
 
-export async function getLeaveTypes(): Promise<LeaveTypeOption[]> {
+export async function getLeaveTypes(employeeId?: string): Promise<LeaveTypeOption[]> {
+  const empId = employeeId ?? await getMyEmployeeId()
+  if (empId) {
+    // Fetch leave types allocated to this employee
+    const params = new URLSearchParams({
+      doctype: 'Leave Allocation',
+      fields: JSON.stringify(['leave_type']),
+      filters: JSON.stringify([['employee', '=', empId], ['docstatus', '=', 1]]),
+      limit_page_length: '0',
+      order_by: 'leave_type asc',
+      group_by: 'leave_type',
+    })
+    const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+    const data = (await res.json()) as GetListResponse<{ leave_type: string }>
+    if (res.ok && !data.exc && data.message && data.message.length > 0) {
+      const seen = new Set<string>()
+      return data.message
+        .filter((r) => {
+          if (seen.has(r.leave_type)) {
+            return false
+          }
+          seen.add(r.leave_type)
+          return true
+        })
+        .map((r) => ({ value: r.leave_type, label: r.leave_type }))
+    }
+  }
+  // Fallback: all leave types
   const params = new URLSearchParams({
     doctype: 'Leave Type',
     fields: JSON.stringify(['name']),
@@ -244,14 +293,28 @@ export async function cancelLeaveRequest(leaveId: string): Promise<void> {
 }
 
 export async function approveLeaveRequest(leaveId: string): Promise<void> {
-  const res = await http(`${FRAPPE_BASE}/api/resource/Leave Application/${leaveId}`, {
-    method: 'PUT',
+  const action = LeaveRequestWorkflowAction.APPROVE
+
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.model.workflow.apply_workflow`, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ status: 'Approved' }),
+    body: JSON.stringify({
+      doc: JSON.stringify({ doctype: 'Leave Application', name: leaveId }),
+      action,
+    }),
   })
   const data = (await res.json()) as { exc?: string; _server_messages?: string }
   if (!res.ok) {
-    throw new Error(data.exc ?? data._server_messages ?? 'Failed to approve leave request.')
+    let msg = 'Failed to approve leave request.'
+    if (data._server_messages) {
+      try {
+        const parsed = JSON.parse(data._server_messages) as string | string[]
+        const first = Array.isArray(parsed) ? parsed[0] : parsed
+        const inner = JSON.parse(first) as { message?: string }
+        if (inner.message) msg = inner.message
+      } catch { /* use default */ }
+    }
+    throw new Error(data.exc ?? msg)
   }
 }
 

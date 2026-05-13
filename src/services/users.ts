@@ -48,7 +48,10 @@ export async function createUser(email: string, fullName: string): Promise<strin
     first_name: firstName,
     last_name: lastName,
     enabled: 1,
-    send_welcome_email: 0,
+    send_welcome_email: 1,
+    roles: [
+      { role: 'HR User' },
+    ],
   }
   const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.insert`, {
     method: 'POST',
@@ -108,4 +111,37 @@ export async function updateCurrentUserProfile(input: UpdateUserProfileInput): P
     throw new Error(data.exc ?? data._server_messages ?? 'Failed to save profile.')
   }
   return userCodec.decode(data.message)
+}
+
+export async function updatePassword(
+  key: string,
+  oldPassword: string,
+  newPassword: string,
+  confirmPassword: string,
+): Promise<void> {
+  const formData = new FormData()
+  formData.append('key', key)
+  formData.append('old_password', oldPassword)
+  formData.append('new_password', newPassword)
+  formData.append('confirm_password', confirmPassword)
+  formData.append('logout_all_sessions', '1')
+  formData.append('cmd', 'frappe.core.doctype.user.user.update_password')
+
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.core.doctype.user.user.update_password`, {
+    method: 'POST',
+    body: formData,
+  })
+  const data = (await res.json()) as { message?: string; exc?: string; _server_messages?: string }
+  if (!res.ok || data.exc) {
+    let msg = 'Failed to update password.'
+    if (data._server_messages) {
+      try {
+        const parsed = JSON.parse(data._server_messages) as string | string[]
+        const first = Array.isArray(parsed) ? parsed[0] : parsed
+        const inner = JSON.parse(first) as { message?: string }
+        if (inner.message) msg = inner.message
+      } catch { /* use default */ }
+    }
+    throw new Error(data.exc ?? msg)
+  }
 }

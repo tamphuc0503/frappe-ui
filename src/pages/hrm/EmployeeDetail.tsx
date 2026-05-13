@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useFetchOnce } from '../../hooks/useFetchOnce'
 import { useParams, useNavigate, useLocation, useBlocker } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, FileText, Loader2, Plus, Save, Trash2, Upload, X } from 'lucide-react'
@@ -221,20 +221,15 @@ export function EmployeeDetail() {
   const [certificates, setCertificates] = useState<Certificate[]>([])
   const [selectedCerts, setSelectedCerts] = useState<Set<string>>(new Set())
 
-  // Dropdown options — fetched on first open, not on mount.
+  // Dropdown options — fetched on mount.
   const [departments, setDepartments] = useState<LookupOption[]>([])
   const [designations, setDesignations] = useState<LookupOption[]>([])
   const [genders, setGenders] = useState<LookupOption[]>([])
-  const [loadingDepartments, setLoadingDepartments] = useState(false)
-  const [loadingDesignations, setLoadingDesignations] = useState(false)
-  const [loadingGenders, setLoadingGenders] = useState(false)
-  const startedDeptRef = useRef(false)
-  const startedDesigRef = useRef(false)
-  const startedGenderRef = useRef(false)
-  const mountedRef = useRef(true)
-  useEffect(() => () => { mountedRef.current = false }, [])
+  const [loadingDepartments, setLoadingDepartments] = useState(true)
+  const [loadingDesignations, setLoadingDesignations] = useState(true)
+  const [loadingGenders, setLoadingGenders] = useState(true)
 
-  // Fetch employee record only.
+  // Fetch employee record and dropdown data.
   useFetchOnce(() => {
     if (!id) return
     setFetchLoading(true)
@@ -248,37 +243,22 @@ export function EmployeeDetail() {
       })
       .catch((err) => setFetchError(err instanceof Error ? err.message : 'Failed to load employee.'))
       .finally(() => setFetchLoading(false))
-  }, id)
 
-  function loadDepartments() {
-    if (startedDeptRef.current) return
-    startedDeptRef.current = true
-    setLoadingDepartments(true)
     getDepartments()
-      .then((data) => { if (mountedRef.current) setDepartments(data) })
-      .catch(() => { startedDeptRef.current = false })
-      .finally(() => { if (mountedRef.current) setLoadingDepartments(false) })
-  }
+      .then((data) => setDepartments(data))
+      .catch((err) => console.error('[EmployeeDetail] getDepartments error:', err))
+      .finally(() => setLoadingDepartments(false))
 
-  function loadDesignations() {
-    if (startedDesigRef.current) return
-    startedDesigRef.current = true
-    setLoadingDesignations(true)
     getDesignations()
-      .then((data) => { if (mountedRef.current) setDesignations(data) })
-      .catch(() => { startedDesigRef.current = false })
-      .finally(() => { if (mountedRef.current) setLoadingDesignations(false) })
-  }
+      .then((data) => setDesignations(data))
+      .catch((err) => console.error('[EmployeeDetail] getDesignations error:', err))
+      .finally(() => setLoadingDesignations(false))
 
-  function loadGenders() {
-    if (startedGenderRef.current) return
-    startedGenderRef.current = true
-    setLoadingGenders(true)
     getGenders()
-      .then((data) => { if (mountedRef.current) setGenders(data) })
-      .catch(() => { startedGenderRef.current = false })
-      .finally(() => { if (mountedRef.current) setLoadingGenders(false) })
-  }
+      .then((data) => setGenders(data))
+      .catch((err) => console.error('[EmployeeDetail] getGenders error:', err))
+      .finally(() => setLoadingGenders(false))
+  }, id)
 
   function changeTab(next: TabId) {
     if (next === tab) return
@@ -413,9 +393,6 @@ export function EmployeeDetail() {
   const dropdownOptions: DropdownOptions = {
     departments, designations, genders,
     loadingDepartments, loadingDesignations, loadingGenders,
-    onOpenDepartments: loadDepartments,
-    onOpenDesignations: loadDesignations,
-    onOpenGenders: loadGenders,
   }
 
   const loading = pageLoading || fetchLoading

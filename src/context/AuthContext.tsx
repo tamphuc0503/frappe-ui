@@ -47,14 +47,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const { fullName, roles } = await frappeLogin(email, password)
         const name = fullName || deriveNameFromEmail(email)
+        let primaryRole = roles[0] ?? 'Guest'
+        if (roles.includes('HR Manager')) primaryRole = 'HR Manager'
+        else if (roles.includes('HR User')) primaryRole = 'HR User'
+        else if (roles.includes('Administrator')) primaryRole = 'Administrator'
         const newUser: User = {
           email,
           name,
-          role: 'Administrator',
+          role: primaryRole,
           roles,
           avatarInitials: getInitials(name),
         }
         setUser(newUser)
+        localStorage.setItem('user_roles', JSON.stringify(roles))
         const company = await getCompany().catch(() => null)
         setCompanyCache(company)
         return { success: true }
@@ -70,6 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearSid()
     clearApiCredentials()
     clearCompanyCache()
+    localStorage.removeItem('user_roles')
     setUser(null)
   }, [])
 
