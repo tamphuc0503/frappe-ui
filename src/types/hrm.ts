@@ -61,7 +61,50 @@ export interface AttendanceRecord {
   status: AttendanceStatus
 }
 
+// ─── Staffing Plan ─────────────────────────────────────────────────────────────
+export interface StaffingPlanDetail {
+  designation: string
+  vacancies: number
+  estimatedCostPerPosition: number
+  totalEstimatedCost: number
+  numberOfPositions: number
+}
+
+export interface StaffingPlan {
+  id: string
+  name: string
+  company: string
+  department: string
+  fromDate: string
+  toDate: string
+  totalEstimatedBudget: number
+  staffingDetails: StaffingPlanDetail[]
+  docstatus: number
+}
+
 // ─── Recruitment ───────────────────────────────────────────────────────────────
+export interface JobOpening {
+  id: string
+  jobTitle: string
+  designation: string
+  department: string
+  status: JobOpeningStatus
+  description: string
+  postedOn: string
+  closesOn: string
+  company: string
+}
+
+export type JobOpeningStatus = 'Open' | 'Screening' | 'Ready for Interview' | 'Interviewed' | 'Onboarding' | 'Rejected' | 'Closed'
+
+export interface JobOpeningColumn {
+  key: JobOpeningStatus
+  label: string
+  color: string
+  headerColor: string
+  jobs: JobOpening[]
+}
+
 export interface Candidate {
   id: number
   name: string
@@ -74,17 +117,39 @@ export interface Candidate {
   score?: number
 }
 
+export interface JobApplicant {
+  id: string
+  applicantName: string
+  emailAddress: string
+  jobTitle: string
+  status: string
+  rating: number
+  notes: string
+  resumeLink: string
+  source: string
+  createdOn: string
+}
+
+export interface InterviewRound {
+  id: string
+  jobApplicant: string
+  applicantName: string
+  jobOpening: string
+  interviewRound: string
+  scheduledDate: string
+  fromTime: string
+  toTime: string
+  status: string
+  rating: number
+  totalScore: number
+  averageRating: number
+  result: string
+}
+
 export interface KanbanColumn {
   key: string
   label: string
   color: string
   headerColor: string
   candidates: Candidate[]
-}
-
-// ─── Clock In/Out ──────────────────────────────────────────────────────────────
-export interface ClockRecord {
-  date: string         // YYYY-MM-DD
-  clockIn: string | null   // HH:MM
-  clockOut: string | null  // HH:MM
 }

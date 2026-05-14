@@ -20,6 +20,8 @@ import { EmployeeDetail } from './pages/hrm/EmployeeDetail'
 import { Leave } from './pages/hrm/Leave'
 import { Payrolls } from './pages/hrm/Payrolls'
 import { Recruitment } from './pages/hrm/Recruitment'
+import { JobOpeningDetail } from './pages/hrm/JobOpeningDetail'
+import { Staffings } from './pages/hrm/Staffings'
 import { ShiftAttendance } from './pages/hrm/ShiftAttendance'
 import { ClockInOut } from './pages/hrm/ClockInOut'
 
@@ -76,6 +78,8 @@ const router = createBrowserRouter(
         <Route path="/hrm/leave" element={<Leave />} />
         <Route path="/hrm/payrolls" element={<Payrolls />} />
         <Route path="/hrm/recruitment" element={<Recruitment />} />
+        <Route path="/hrm/recruitment/:id" element={<JobOpeningDetail />} />
+        <Route path="/hrm/staffings" element={<Staffings />} />
         <Route path="/hrm/attendance" element={<ShiftAttendance />} />
         <Route path="/hrm/clock-in-out" element={<ClockInOut />} />
 

@@ -77,6 +77,7 @@ const navItems: NavItem[] = [
       { label: 'Employees', icon: <UserCircle className="w-4 h-4" />, path: '/hrm/employees' },
       { label: 'Leave', icon: <CalendarOff className="w-4 h-4" />, path: '/hrm/leave' },
       { label: 'Payrolls', icon: <Banknote className="w-4 h-4" />, path: '/hrm/payrolls' },
+      { label: 'Staffings', icon: <Users className="w-4 h-4" />, path: '/hrm/staffings' },
       { label: 'Recruitment', icon: <UserPlus className="w-4 h-4" />, path: '/hrm/recruitment' },
       { label: 'Shift & Attendance', icon: <Clock className="w-4 h-4" />, path: '/hrm/attendance' },
     ],

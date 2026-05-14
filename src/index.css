@@ -102,6 +102,20 @@ p {
 .tab-enter-right { animation: tab-slide-from-right 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .tab-enter-left  { animation: tab-slide-from-left  0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* Panel slide-in from left (used by detail panels) */
+@keyframes panel-slide-in {
+  from { opacity: 0; transform: translateX(-100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.panel-slide-enter { animation: panel-slide-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Full-page slide-in from right */
+@keyframes page-slide-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.page-slide-enter { animation: page-slide-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 /* Hide scrollbar visuals while keeping scroll behavior. */
 .scrollbar-hide {
   scrollbar-width: none;

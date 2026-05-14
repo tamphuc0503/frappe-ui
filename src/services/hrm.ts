@@ -2,7 +2,7 @@ import { http, FRAPPE_BASE } from './http'
 import { getCompanyCache } from './company'
 import { getUserCache } from './auth'
 import { createUser } from './users'
-import type { Employee, AttendanceRecord, AttendanceStatus } from '../types/hrm'
+import type { Employee, AttendanceRecord, AttendanceStatus, JobOpening, JobOpeningStatus, JobApplicant, InterviewRound, StaffingPlan } from '../types/hrm'
 import {
   employeeCodec,
   toFrappeEmployeeDoc,
@@ -12,7 +12,9 @@ import {
 } from '../transformers/employee'
 import {
   toFrappeDepartmentDoc,
+  decodeDepartment,
   type FrappeDepartment,
+  type Department,
 } from '../transformers/department'
 
 export type { CreateEmployeeInput }
@@ -73,6 +75,20 @@ export async function getDepartments(): Promise<LookupOption[]> {
   }
   console.debug('[hrm] getDepartments raw:', data.message)
   return toLookupOptions(data.message, 'department_name')
+}
+
+export async function getDepartmentList(): Promise<Department[]> {
+  const params = new URLSearchParams({
+    doctype: 'Department',
+    fields: JSON.stringify(['name', 'department_name', 'parent_department', 'is_group', 'disabled']),
+    limit_page_length: '0',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<FrappeDepartment>
+  if (!res.ok || data.exc) {
+    throw new Error(data.exc ?? 'Failed to fetch departments.')
+  }
+  return (data.message ?? []).map(decodeDepartment)
 }
 
 export async function getDesignations(): Promise<LookupOption[]> {
@@ -205,7 +221,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
   return employeeCodec.decode(data.message)
 }
 
-export async function createDepartment(name: string): Promise<void> {
+export async function createDepartment(name: string, parentDepartment?: string): Promise<void> {
   const company = getCompanyCache()
   const user = getUserCache()
   if (!company) {
@@ -218,6 +234,7 @@ export async function createDepartment(name: string): Promise<void> {
     name,
     company: company.name,
     owner: user.email,
+    parentDepartment,
   })
   const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.insert`, {
     method: 'POST',
@@ -454,4 +471,264 @@ export async function getWeekAttendanceSummary(
     byDate.set(r.date, entry)
   }
   return Array.from(byDate.entries()).map(([date, counts]) => ({ date, ...counts }))
+}
+
+// ── Job Openings ─────────────────────────────────────────────────────────────
+
+interface FrappeJobOpening {
+  name: string
+  job_title?: string
+  designation?: string
+  department?: string
+  status?: string
+  description?: string
+  posted_on?: string
+  closes_on?: string
+  company?: string
+}
+
+const JOB_STATUS_VALUES: JobOpeningStatus[] = ['Open', 'Screening', 'Ready for Interview', 'Interviewed', 'Onboarding', 'Rejected', 'Closed']
+
+function decodeJobStatus(s: string | undefined): JobOpeningStatus {
+  return (JOB_STATUS_VALUES as string[]).includes(s ?? '') ? (s as JobOpeningStatus) : 'Open'
+}
+
+function decodeJobOpening(f: FrappeJobOpening): JobOpening {
+  return {
+    id: f.name,
+    jobTitle: f.job_title || f.designation || f.name,
+    designation: f.designation || '',
+    department: f.department || '',
+    status: decodeJobStatus(f.status),
+    description: f.description || '',
+    postedOn: f.posted_on || '',
+    closesOn: f.closes_on || '',
+    company: f.company || '',
+  }
+}
+
+export async function getJobOpenings(): Promise<JobOpening[]> {
+  const params = new URLSearchParams({
+    doctype: 'Job Opening',
+    fields: JSON.stringify([
+      'name', 'job_title', 'designation', 'department', 'status',
+      'description', 'posted_on', 'closes_on', 'company',
+    ]),
+    limit_page_length: '0',
+    order_by: 'modified desc',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<FrappeJobOpening>
+  if (!res.ok || data.exc) {
+    throw new Error(data.exc ?? 'Failed to fetch job openings.')
+  }
+  return (data.message ?? []).map(decodeJobOpening)
+}
+
+export async function updateJobOpeningStatus(id: string, status: string): Promise<void> {
+  const res = await http(`${FRAPPE_BASE}/api/resource/Job Opening/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error((data as { exc?: string }).exc ?? 'Failed to update job opening status.')
+  }
+}
+
+export async function createJobOpening(input: {
+  jobTitle: string
+  designation?: string
+  department?: string
+  description?: string
+}): Promise<JobOpening> {
+  const company = getCompanyCache()
+  if (!company) throw new Error('No company configured. Please log out and back in.')
+  const doc = {
+    doctype: 'Job Opening',
+    job_title: input.jobTitle,
+    designation: input.designation || '',
+    department: input.department || '',
+    description: input.description || '',
+    company: company.name,
+    status: 'Open',
+  }
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.insert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ doc }),
+  })
+  const data = (await res.json()) as InsertResponse<FrappeJobOpening>
+  if (!res.ok) {
+    throw new Error(data.exc ?? data._server_messages ?? 'Failed to create job opening.')
+  }
+  return decodeJobOpening(data.message as FrappeJobOpening)
+}
+
+interface FrappeJobApplicant {
+  name: string
+  applicant_name?: string
+  email_id?: string
+  job_title?: string
+  status?: string
+  rating?: number
+  notes?: string
+  resume_link?: string
+  source?: string
+  creation?: string
+}
+
+interface FrappeInterview {
+  name: string
+  job_applicant?: string
+  job_opening?: string
+  interview_round?: string
+  scheduled_date?: string
+  from_time?: string
+  to_time?: string
+  status?: string
+  rating?: number
+  total_score?: number
+  average_rating?: number
+  result?: string
+}
+
+export async function getJobApplicants(jobOpeningId: string): Promise<JobApplicant[]> {
+  const params = new URLSearchParams({
+    doctype: 'Job Applicant',
+    fields: JSON.stringify([
+      'name', 'applicant_name', 'email_id', 'job_title', 'status',
+      'rating', 'notes', 'resume_link', 'source', 'creation',
+    ]),
+    filters: JSON.stringify([['job_title', '=', jobOpeningId]]),
+    limit_page_length: '0',
+    order_by: 'creation desc',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<FrappeJobApplicant>
+  if (!res.ok || data.exc) {
+    throw new Error(data.exc ?? 'Failed to fetch job applicants.')
+  }
+  return (data.message ?? []).map((r) => ({
+    id: r.name,
+    applicantName: r.applicant_name || '',
+    emailAddress: r.email_id || '',
+    jobTitle: r.job_title || '',
+    status: r.status || '',
+    rating: r.rating ?? 0,
+    notes: r.notes || '',
+    resumeLink: r.resume_link || '',
+    source: r.source || '',
+    createdOn: r.creation || '',
+  }))
+}
+
+export async function getInterviews(jobOpeningId: string): Promise<InterviewRound[]> {
+  const params = new URLSearchParams({
+    doctype: 'Interview',
+    fields: JSON.stringify([
+      'name', 'job_applicant', 'job_opening', 'interview_round',
+      'scheduled_date', 'from_time', 'to_time', 'status',
+      'rating', 'total_score', 'average_rating', 'result',
+    ]),
+    filters: JSON.stringify([['job_opening', '=', jobOpeningId]]),
+    limit_page_length: '0',
+    order_by: 'scheduled_date desc',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<FrappeInterview>
+  if (!res.ok || data.exc) {
+    throw new Error(data.exc ?? 'Failed to fetch interviews.')
+  }
+  return (data.message ?? []).map((r) => ({
+    id: r.name,
+    jobApplicant: r.job_applicant || '',
+    applicantName: '',
+    jobOpening: r.job_opening || '',
+    interviewRound: r.interview_round || '',
+    scheduledDate: r.scheduled_date || '',
+    fromTime: r.from_time || '',
+    toTime: r.to_time || '',
+    status: r.status || '',
+    rating: r.rating ?? 0,
+    totalScore: r.total_score ?? 0,
+    averageRating: r.average_rating ?? 0,
+    result: r.result || '',
+  }))
+}
+
+// ── Staffing Plans ──────────────────────────────────────────────────────────────
+
+interface FrappeStaffingPlan {
+  name: string
+  staffing_plan?: string
+  company?: string
+  department?: string
+  from_date?: string
+  to_date?: string
+  total_estimated_budget?: number
+  docstatus?: number
+}
+
+interface FrappeStaffingDetail {
+  designation?: string
+  vacancies?: number
+  estimated_cost_per_position?: number
+  total_estimated_cost?: number
+  number_of_positions?: number
+}
+
+export async function getStaffingPlans(): Promise<StaffingPlan[]> {
+  const params = new URLSearchParams({
+    doctype: 'Staffing Plan',
+    fields: JSON.stringify([
+      'name', 'company', 'department',
+      'from_date', 'to_date', 'total_estimated_budget', 'docstatus',
+    ]),
+    limit_page_length: '0',
+    order_by: 'modified desc',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<FrappeStaffingPlan>
+  if (!res.ok || data.exc) {
+    throw new Error(data.exc ?? 'Failed to fetch staffing plans.')
+  }
+  return (data.message ?? []).map((r) => ({
+    id: r.name,
+    name: r.name,
+    company: r.company || '',
+    department: r.department || '',
+    fromDate: r.from_date || '',
+    toDate: r.to_date || '',
+    totalEstimatedBudget: r.total_estimated_budget ?? 0,
+    staffingDetails: [],
+    docstatus: r.docstatus ?? 0,
+  }))
+}
+
+export async function getStaffingPlanDetails(planId: string): Promise<StaffingPlan> {
+  const res = await http(`${FRAPPE_BASE}/api/resource/Staffing Plan/${planId}`)
+  const data = (await res.json()) as { data?: FrappeStaffingPlan & { staffing_details?: FrappeStaffingDetail[] } }
+  if (!res.ok) {
+    throw new Error('Failed to fetch staffing plan details.')
+  }
+  const r = data.data as FrappeStaffingPlan & { staffing_details?: FrappeStaffingDetail[] }
+  return {
+    id: r.name,
+    name: r.name,
+    company: r.company || '',
+    department: r.department || '',
+    fromDate: r.from_date || '',
+    toDate: r.to_date || '',
+    totalEstimatedBudget: r.total_estimated_budget ?? 0,
+    docstatus: r.docstatus ?? 0,
+    staffingDetails: (r.staffing_details ?? []).map((d) => ({
+      designation: d.designation || '',
+      vacancies: d.vacancies ?? 0,
+      estimatedCostPerPosition: d.estimated_cost_per_position ?? 0,
+      totalEstimatedCost: d.total_estimated_cost ?? 0,
+      numberOfPositions: d.number_of_positions ?? 0,
+    })),
+  }
 }

@@ -22,7 +22,32 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { createEmployeeCheckin, getMonthlyCheckins, type EmployeeCheckinRecord } from '../../services/hrm'
 
 function toDateStr(d: Date): string {
-  return d.toISOString().slice(0, 10)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** Convert Frappe UTC datetime string (e.g. "2026-05-13 08:30:00") to local Date */
+function toLocalDate(utcStr: string): Date {
+  return new Date(utcStr.replace(' ', 'T') + 'Z')
+}
+
+/** Get local date string "YYYY-MM-DD" from a Frappe UTC datetime */
+function localDateStr(utcStr: string): string {
+  const d = toLocalDate(utcStr)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** Get local time string "HH:MM" from a Frappe UTC datetime */
+function localTimeStr(utcStr: string): string {
+  const d = toLocalDate(utcStr)
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
 }
 
 function calcDuration(clockIn: string, clockOut: string): string {
@@ -74,20 +99,20 @@ export function ClockInOut() {
     const map = new Map<string, { clockIn: string | null; clockOut: string | null; totalMins: number }>()
     const sorted = [...monthlyCheckins].sort((a, b) => a.time.localeCompare(b.time))
     for (const c of sorted) {
-      const date = c.time.slice(0, 10)
+      const date = localDateStr(c.time)
       if (!map.has(date)) map.set(date, { clockIn: null, clockOut: null, totalMins: 0 })
       const entry = map.get(date)!
-      const t = c.time.slice(11, 16)
+      const t = localTimeStr(c.time)
       if (c.log_type === 'IN' && !entry.clockIn) entry.clockIn = t
       if (c.log_type === 'OUT') entry.clockOut = t
     }
     // Calc total work minutes per day (pair IN→OUT)
     for (const [date] of map) {
-      const dayCheckins = sorted.filter((c) => c.time.slice(0, 10) === date)
+      const dayCheckins = sorted.filter((c) => localDateStr(c.time) === date)
       let openIn: number | null = null
       let totalMins = 0
       for (const c of dayCheckins) {
-        const [h, m] = c.time.slice(11, 16).split(':').map(Number)
+        const [h, m] = localTimeStr(c.time).split(':').map(Number)
         if (c.log_type === 'IN' && openIn === null) openIn = h * 60 + m
         else if (c.log_type === 'OUT' && openIn !== null) {
           totalMins += (h * 60 + m) - openIn
@@ -110,7 +135,7 @@ export function ClockInOut() {
   const checkins = useMemo(() => {
     if (!selectedDate) return []
     return [...monthlyCheckins]
-      .filter((c) => c.time.slice(0, 10) === selectedDate)
+      .filter((c) => localDateStr(c.time) === selectedDate)
       .sort((a, b) => a.time.localeCompare(b.time))
   }, [monthlyCheckins, selectedDate])
 
@@ -126,7 +151,7 @@ export function ClockInOut() {
   // Determine clock state from last checkin of today
   const todayCheckins = useMemo(() =>
     [...monthlyCheckins]
-      .filter((c) => c.time.slice(0, 10) === todayStr)
+      .filter((c) => localDateStr(c.time) === todayStr)
       .sort((a, b) => a.time.localeCompare(b.time)),
     [monthlyCheckins, todayStr]
   )
@@ -660,7 +685,7 @@ export function ClockInOut() {
                           <div className="flex flex-col items-center">
                             <div className={`w-4 h-4 rounded-full border-2 border-white shadow ${isIn ? 'bg-emerald-500' : 'bg-red-500'}`} />
                             <p className={`text-[11px] font-semibold mt-1.5 ${isIn ? 'text-emerald-700' : 'text-red-700'}`}>
-                              {c.time.slice(11, 16)}
+                              {localTimeStr(c.time)}
                             </p>
                             <p className="text-[10px] text-gray-400 mt-0.5">{c.log_type === 'IN' ? 'In' : 'Out'}</p>
                           </div>
@@ -669,9 +694,9 @@ export function ClockInOut() {
                             <div className="flex-1 flex flex-col items-center mt-[7px]">
                               <div className={`h-0.5 w-full ${isIn ? 'bg-emerald-300' : 'bg-gray-200'}`} />
                               {(() => {
-                                const [h1, m1] = c.time.slice(11, 16).split(':').map(Number)
+                                const [h1, m1] = localTimeStr(c.time).split(':').map(Number)
                                 const next = arr[i + 1]
-                                const [h2, m2] = next.time.slice(11, 16).split(':').map(Number)
+                                const [h2, m2] = localTimeStr(next.time).split(':').map(Number)
                                 const diff = (h2 * 60 + m2) - (h1 * 60 + m1)
                                 if (diff <= 0) return null
                                 const dh = Math.floor(diff / 60)
@@ -710,9 +735,9 @@ export function ClockInOut() {
                     for (const c of sorted) {
                       if (c.log_type === 'IN') {
                         if (currentIn !== null) sessions.push({ inTime: currentIn, outTime: null })
-                        currentIn = c.time.slice(11, 16)
+                        currentIn = localTimeStr(c.time)
                       } else if (c.log_type === 'OUT' && currentIn !== null) {
-                        sessions.push({ inTime: currentIn, outTime: c.time.slice(11, 16) })
+                        sessions.push({ inTime: currentIn, outTime: localTimeStr(c.time) })
                         currentIn = null
                       }
                     }
