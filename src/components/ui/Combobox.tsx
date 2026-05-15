@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, ChevronDown, X, Loader2 } from 'lucide-react'
 
 export type ComboboxOption = string | { value: string; label: string }
@@ -22,6 +23,7 @@ interface ComboboxProps {
   clearable?: boolean
   size?: 'sm' | 'md'
   onOpen?: () => void
+  onQueryChange?: (query: string) => void
 }
 
 export function Combobox({
@@ -36,22 +38,46 @@ export function Combobox({
   clearable = true,
   size = 'md',
   onOpen,
+  onQueryChange,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
+  const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const onOpenRef = useRef(onOpen)
+  const onQueryChangeRef = useRef(onQueryChange)
   useEffect(() => { onOpenRef.current = onOpen })
+  useEffect(() => { onQueryChangeRef.current = onQueryChange })
 
   useEffect(() => {
-    if (open) onOpenRef.current?.()
+    if (open) {
+      onOpenRef.current?.()
+      setDropdownRect(containerRef.current?.getBoundingClientRect() ?? null)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    function reposition() {
+      setDropdownRect(containerRef.current?.getBoundingClientRect() ?? null)
+    }
+    window.addEventListener('scroll', reposition, true)
+    window.addEventListener('resize', reposition)
+    return () => {
+      window.removeEventListener('scroll', reposition, true)
+      window.removeEventListener('resize', reposition)
+    }
   }, [open])
 
   useEffect(() => {
     function onPointerDown(e: PointerEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      const inContainer = containerRef.current?.contains(target) ?? false
+      const inDropdown = dropdownRef.current?.contains(target) ?? false
+      if (!inContainer && !inDropdown) {
         setOpen(false)
         setQuery('')
       }
@@ -175,6 +201,7 @@ export function Combobox({
           onChange={(e) => {
             setQuery(e.target.value)
             setOpen(true)
+            onQueryChangeRef.current?.(e.target.value)
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
@@ -212,8 +239,18 @@ export function Combobox({
         </div>
       </div>
 
-      {open && !disabled && (
-        <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+      {open && !disabled && dropdownRect && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: 'fixed',
+            top: dropdownRect.bottom + 4,
+            left: dropdownRect.left,
+            width: dropdownRect.width,
+            zIndex: 9999,
+          }}
+          className="max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg"
+        >
           {filtered.length === 0 ? (
             <div className="px-3 py-2 text-sm text-gray-400">
               {loading
@@ -246,7 +283,8 @@ export function Combobox({
               )
             })
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

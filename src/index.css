@@ -109,6 +109,20 @@ p {
 }
 .panel-slide-enter { animation: panel-slide-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* Panel slide-in from right (right-to-left entry) */
+@keyframes panel-slide-from-right {
+  from { opacity: 0; transform: translateX(100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.panel-slide-right { animation: panel-slide-from-right 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Panel slide-out to right (exit) */
+@keyframes panel-slide-to-right {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(100%); }
+}
+.panel-slide-right-out { animation: panel-slide-to-right 0.28s cubic-bezier(0.4, 0, 1, 1) both; }
+
 /* Full-page slide-in from right */
 @keyframes page-slide-in {
   from { transform: translateX(100%); }

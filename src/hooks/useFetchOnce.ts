@@ -6,10 +6,13 @@ import { useEffect, useRef } from 'react'
 // legitimate re-fetches when those deps change.
 export function useFetchOnce(effect: () => void, key: string = ''): void {
   const lastKeyRef = useRef<string | null>(null)
+  const effectRef = useRef(effect)
+  effectRef.current = effect
+
   useEffect(() => {
     if (lastKeyRef.current === key) return
     lastKeyRef.current = key
-    effect()
+    effectRef.current()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
 }

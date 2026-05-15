@@ -1,12 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Briefcase, Building2, MapPin, Users, ClipboardList, Info, Mail, Star, Calendar, Clock, ExternalLink, UserCheck, FileText, Loader2 } from 'lucide-react'
+import { ArrowLeft, Briefcase, Building2, MapPin, Users, ClipboardList, Info, Mail, Star, Calendar, Clock, ExternalLink, UserCheck, FileText, Loader2, Plus, X, Phone, Link, DollarSign } from 'lucide-react'
 import { Badge } from '../../components/ui/Badge'
+import { Combobox } from '../../components/ui/Combobox'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { useFetchOnce } from '../../hooks/useFetchOnce'
 import { Sk, SkPageHeader } from '../../components/ui/Skeleton'
-import { getJobOpenings, getJobApplicants, getInterviews } from '../../services/hrm'
+import { FileUploader } from '../../components/ui/FileUploader'
+import { getJobOpenings, getJobApplicants, getInterviews, createJobApplicant, getEmployees, getApplicantSources } from '../../services/hrm'
 import type { JobOpening, JobApplicant, InterviewRound } from '../../types/hrm'
+import type { UploadedFile } from '../../services/files'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
@@ -70,6 +73,330 @@ function DetailSkeleton() {
   )
 }
 
+// ── Add Applicant Dialog ────────────────────────────────────────────────────────
+
+const APPLICANT_SOURCES: string[] = []
+
+interface AddApplicantForm {
+  applicantName: string
+  emailAddress: string
+  phone: string
+  source: string
+  referredBy: string
+  resumeLink: string
+  salaryFrom: string
+  salaryTo: string
+  notes: string
+}
+
+interface AddApplicantDialogProps {
+  jobOpeningId: string
+  jobTitle: string
+  onClose: () => void
+  onSaved: (applicant: JobApplicant) => void
+}
+
+function AddApplicantDialog({ jobOpeningId, jobTitle, onClose, onSaved }: Readonly<AddApplicantDialogProps>) {
+  const [form, setForm] = useState<AddApplicantForm>({
+    applicantName: '',
+    emailAddress: '',
+    phone: '',
+    source: '',
+    referredBy: '',
+    resumeLink: '',
+    salaryFrom: '',
+    salaryTo: '',
+    notes: '',
+  })
+  const [resumeFile, setResumeFile] = useState<UploadedFile | null>(null)
+  const [sources, setSources] = useState<{ value: string; label: string }[]>([])
+  const [loadingSources, setLoadingSources] = useState(false)
+  const [employeeOptions, setEmployeeOptions] = useState<{ value: string; label: string }[]>([])
+  const [loadingEmployees, setLoadingEmployees] = useState(false)
+  const employeesLoadedRef = useRef(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [shakingFields, setShakingFields] = useState<Set<keyof AddApplicantForm>>(new Set())
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !submitting) onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [submitting, onClose])
+
+  useEffect(() => {
+    setLoadingSources(true)
+    getApplicantSources()
+      .then((s) => setSources(s))
+      .catch((err: unknown) => {
+        setSubmitError(err instanceof Error ? err.message : 'Failed to load sources.')
+      })
+      .finally(() => setLoadingSources(false))
+  }, [])
+
+  function shake(fields: (keyof AddApplicantForm)[]) {
+    setShakingFields(new Set(fields))
+  }
+
+  function handleSourceChange(selected: string[]) {
+    const val = selected[0] ?? ''
+    setForm((prev) => ({ ...prev, source: val, referredBy: '' }))
+    setSubmitError(null)
+    if (val.toLowerCase().includes('referral') && !employeesLoadedRef.current) {
+      employeesLoadedRef.current = true
+      setLoadingEmployees(true)
+      getEmployees()
+        .then((emps) => setEmployeeOptions(emps.map((emp) => ({ value: emp.id, label: emp.name }))))
+        .catch(() => {})
+        .finally(() => setLoadingEmployees(false))
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitError(null)
+    const missing: (keyof AddApplicantForm)[] = []
+    if (!form.applicantName.trim()) missing.push('applicantName')
+    if (!form.emailAddress.trim()) missing.push('emailAddress')
+    if (missing.length > 0) { shake(missing); return }
+    setSubmitting(true)
+    try {
+      const applicant = await createJobApplicant({
+        applicantName: form.applicantName,
+        emailAddress: form.emailAddress,
+        jobOpeningId,
+        phone: form.phone,
+        source: form.source,
+        referredBy: form.referredBy || undefined,
+        resumeLink: resumeFile?.url || form.resumeLink,
+        salaryFrom: form.salaryFrom ? Number(form.salaryFrom) : undefined,
+        salaryTo: form.salaryTo ? Number(form.salaryTo) : undefined,
+        notes: form.notes,
+      })
+      onSaved(applicant)
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to create applicant.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  function field(key: keyof AddApplicantForm) {
+    return {
+      value: form[key],
+      onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        setForm((prev) => ({ ...prev, [key]: e.target.value }))
+        setSubmitError(null)
+        if (shakingFields.has(key)) setShakingFields((prev) => { const s = new Set(prev); s.delete(key); return s })
+      },
+      className: `form-input ${
+        shakingFields.has(key) ? 'border-red-400 field-shake' : ''
+      }`,
+      onAnimationEnd: () => setShakingFields((prev) => { const s = new Set(prev); s.delete(key); return s }),
+    }
+  }
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 backdrop-enter"
+        onClick={submitting ? undefined : onClose}
+      />
+
+      {/* Centered modal */}
+      <div className="fixed inset-x-0 top-0 z-50 flex justify-center pointer-events-none">
+        <div
+          className="bg-white rounded-b-2xl shadow-2xl w-full max-w-lg max-h-[90svh] flex flex-col overflow-hidden pointer-events-auto dialog-enter"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 flex-shrink-0">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Add Applicant</h2>
+              <p className="text-sm text-gray-500 mt-0.5 truncate">{jobTitle}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { if (!submitting) onClose() }}
+              disabled={submitting}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <form onSubmit={(e) => { void handleSubmit(e) }} noValidate className="flex-1 flex flex-col overflow-hidden min-h-0">
+            {/* Body — scrolls */}
+            <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 space-y-4">
+              {/* Submit error */}
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${submitError ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>
+                <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  {submitError}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label htmlFor="applicantName" className="block text-sm font-medium text-gray-700 mb-1">
+                    Applicant Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="applicantName"
+                    type="text"
+                    placeholder="Jane Doe"
+                    {...field('applicantName')}
+                  />
+                </div>
+
+                <div className="col-span-2 sm:col-span-1">
+                  <label htmlFor="emailAddress" className="block text-sm font-medium text-gray-700 mb-1">
+                    Email <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      id="emailAddress"
+                      type="email"
+                      placeholder="jane@example.com"
+                      {...field('emailAddress')}
+                      className={`form-input pl-9 ${shakingFields.has('emailAddress') ? 'border-red-400 field-shake' : ''}`}
+                      onAnimationEnd={() => setShakingFields((prev) => { const s = new Set(prev); s.delete('emailAddress'); return s })}
+                    />
+                  </div>
+                </div>
+
+                <div className="col-span-2 sm:col-span-1">
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      id="phone"
+                      type="tel"
+                      placeholder="+1 555 000 0000"
+                      {...field('phone')}
+                      className="form-input pl-9"
+                    />
+                  </div>
+                </div>
+
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
+                  <Combobox
+                    options={sources}
+                    value={form.source ? [form.source] : []}
+                    onChange={handleSourceChange}
+                    max={1}
+                    placeholder="Select source…"
+                    loading={loadingSources}
+                    disabled={submitting}
+                  />
+                </div>
+
+                {form.source.toLowerCase().includes('referral') && (
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Referred By</label>
+                    <Combobox
+                      options={employeeOptions}
+                      value={form.referredBy ? [form.referredBy] : []}
+                      onChange={(vals) => setForm((prev) => ({ ...prev, referredBy: vals[0] ?? '' }))}
+                      max={1}
+                      placeholder="Search employees…"
+                      loading={loadingEmployees}
+                      disabled={submitting}
+                    />
+                  </div>
+                )}
+
+                {/* Salary expectation range */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Salary Expectation</label>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        id="salaryFrom"
+                        type="number"
+                        min="0"
+                        placeholder="From"
+                        {...field('salaryFrom')}
+                        className="form-input pl-9"
+                      />
+                    </div>
+                    <span className="text-gray-400 text-sm flex-shrink-0">to</span>
+                    <div className="relative flex-1">
+                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        id="salaryTo"
+                        type="number"
+                        min="0"
+                        placeholder="To"
+                        {...field('salaryTo')}
+                        className="form-input pl-9"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Resume / CV upload */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Resume / CV</label>
+                  <FileUploader
+                    value={resumeFile}
+                    onChange={setResumeFile}
+                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
+                    label="Upload resume or CV (PDF, Word, or image)"
+                    disabled={submitting}
+                  />
+                  {!resumeFile && (
+                    <div className="mt-2">
+                      <label htmlFor="resumeLink" className="block text-xs text-gray-500 mb-1">Or paste a link</label>
+                      <div className="relative">
+                        <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                          id="resumeLink"
+                          type="url"
+                          placeholder="https://"
+                          {...field('resumeLink')}
+                          className="form-input pl-9"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="col-span-2">
+                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                  <textarea
+                    id="notes"
+                    rows={3}
+                    placeholder="Any additional notes…"
+                    {...field('notes')}
+                    className="form-input resize-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0">
+              <button type="button" onClick={() => { if (!submitting) onClose() }} disabled={submitting} className="btn-secondary">
+                Cancel
+              </button>
+              <button type="submit" disabled={submitting} className="btn-primary flex items-center gap-2">
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                {submitting ? 'Saving…' : 'Add Applicant'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </>
+  )
+}
+
 // ── Main Component ──────────────────────────────────────────────────────────────
 
 export function JobOpeningDetail() {
@@ -82,6 +409,7 @@ export function JobOpeningDetail() {
   const [activeTab, setActiveTab] = useState<DetailTab>('overview')
   const [applicants, setApplicants] = useState<JobApplicant[] | null>(null)
   const [interviews, setInterviews] = useState<InterviewRound[] | null>(null)
+  const [showAddApplicant, setShowAddApplicant] = useState(false)
 
   const loadingApplicants = activeTab === 'applicants' && applicants === null
   const loadingInterviews = activeTab === 'interviews' && interviews === null
@@ -243,6 +571,17 @@ export function JobOpeningDetail() {
 
           {activeTab === 'applicants' && (
             <div>
+              {/* Add Applicant button */}
+              <div className="flex justify-end mb-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAddApplicant(true)}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Applicant
+                </button>
+              </div>
               {loadingApplicants && (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -388,6 +727,18 @@ export function JobOpeningDetail() {
           )}
         </div>
       </div>
+
+      {showAddApplicant && job && (
+        <AddApplicantDialog
+          jobOpeningId={job.id}
+          jobTitle={job.jobTitle}
+          onClose={() => setShowAddApplicant(false)}
+          onSaved={(applicant) => {
+            setApplicants((prev) => (prev ? [applicant, ...prev] : [applicant]))
+            setShowAddApplicant(false)
+          }}
+        />
+      )}
     </div>
   )
 }
