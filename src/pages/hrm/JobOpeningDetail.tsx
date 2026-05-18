@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Briefcase, Building2, MapPin, Users, ClipboardList, Info, Mail, Star, Calendar, Clock, ExternalLink, UserCheck, FileText, Loader2, Plus, X, Phone, Link, DollarSign } from 'lucide-react'
+import { ArrowLeft, Briefcase, Building2, MapPin, Users, ClipboardList, Info, Mail, Star, Calendar, Clock, ExternalLink, UserCheck, FileText, Loader2, Plus, X, Phone, Link, DollarSign, RefreshCw, Check, XCircle, CalendarDays } from 'lucide-react'
 import { Badge } from '../../components/ui/Badge'
 import { Combobox } from '../../components/ui/Combobox'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { useFetchOnce } from '../../hooks/useFetchOnce'
 import { Sk, SkPageHeader } from '../../components/ui/Skeleton'
 import { FileUploader } from '../../components/ui/FileUploader'
-import { getJobOpenings, getJobApplicants, getInterviews, createJobApplicant, getEmployees, getApplicantSources } from '../../services/hrm'
+import { getJobOpenings, getJobApplicants, getInterviews, createJobApplicant, updateJobApplicantStatus, createInterview, getInterviewRounds, getEmployees, getApplicantSources } from '../../services/hrm'
 import type { JobOpening, JobApplicant, InterviewRound } from '../../types/hrm'
 import type { UploadedFile } from '../../services/files'
 
@@ -397,6 +397,179 @@ function AddApplicantDialog({ jobOpeningId, jobTitle, onClose, onSaved }: Readon
   )
 }
 
+// ── Schedule Interview Panel ────────────────────────────────────────────────────
+
+interface ScheduleInterviewPanelProps {
+  applicant: JobApplicant
+  jobOpeningId: string
+  onClose: () => void
+  onScheduled: () => void
+}
+
+function ScheduleInterviewPanel({ applicant, jobOpeningId, onClose, onScheduled }: Readonly<ScheduleInterviewPanelProps>) {
+  const [rounds, setRounds] = useState<{ value: string; label: string }[]>([])
+  const [loadingRounds, setLoadingRounds] = useState(true)
+  const [round, setRound] = useState('')
+  const [date, setDate] = useState('')
+  const [fromTime, setFromTime] = useState('09:00')
+  const [toTime, setToTime] = useState('10:00')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    getInterviewRounds()
+      .then((r) => { setRounds(r); if (r.length > 0) setRound(r[0].value) })
+      .catch(() => {})
+      .finally(() => setLoadingRounds(false))
+  }, [])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (!round || !date) { setError('Please fill in all required fields.'); return }
+    setSubmitting(true)
+    try {
+      await createInterview({
+        jobApplicant: applicant.id,
+        jobOpening: jobOpeningId,
+        interviewRound: round,
+        scheduledDate: date,
+        fromTime,
+        toTime,
+      })
+      onScheduled()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to schedule interview.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 backdrop-enter"
+        onClick={submitting ? undefined : onClose}
+      />
+
+      {/* Centered modal from top */}
+      <div className="fixed inset-x-0 top-0 z-50 flex justify-center pointer-events-none">
+        <div
+          className="bg-white rounded-b-2xl shadow-2xl w-full max-w-lg max-h-[90svh] flex flex-col overflow-hidden pointer-events-auto dialog-enter"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 flex-shrink-0">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Schedule Interview</h2>
+              <p className="text-sm text-gray-500 mt-0.5 truncate">{applicant.applicantName} — {applicant.emailAddress}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { if (!submitting) onClose() }}
+              disabled={submitting}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+      <form onSubmit={(e) => { void handleSubmit(e) }} noValidate className="flex-1 flex flex-col overflow-hidden min-h-0">
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 space-y-4">
+          {error && (
+            <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Interview Round <span className="text-red-500">*</span>
+            </label>
+            {loadingRounds ? (
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading rounds…
+              </div>
+            ) : (
+              <select
+                value={round}
+                onChange={(e) => setRound(e.target.value)}
+                className="form-input"
+                disabled={submitting}
+              >
+                {rounds.length === 0 && <option value="">No rounds found</option>}
+                {rounds.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="sched-date" className="block text-sm font-medium text-gray-700 mb-1">
+              Date <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                id="sched-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="form-input pl-9"
+                disabled={submitting}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="sched-from" className="block text-sm font-medium text-gray-700 mb-1">From</label>
+              <div className="relative">
+                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  id="sched-from"
+                  type="time"
+                  value={fromTime}
+                  onChange={(e) => setFromTime(e.target.value)}
+                  className="form-input pl-9"
+                  disabled={submitting}
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="sched-to" className="block text-sm font-medium text-gray-700 mb-1">To</label>
+              <div className="relative">
+                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  id="sched-to"
+                  type="time"
+                  value={toTime}
+                  onChange={(e) => setToTime(e.target.value)}
+                  className="form-input pl-9"
+                  disabled={submitting}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0">
+          <button type="button" onClick={() => { if (!submitting) onClose() }} disabled={submitting} className="btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" disabled={submitting || !round || !date} className="btn-primary flex items-center gap-2">
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarDays className="w-4 h-4" />}
+            {submitting ? 'Scheduling…' : 'Schedule Interview'}
+          </button>
+        </div>
+      </form>
+        </div>
+      </div>
+    </>
+  )
+}
+
 // ── Main Component ──────────────────────────────────────────────────────────────
 
 export function JobOpeningDetail() {
@@ -410,6 +583,7 @@ export function JobOpeningDetail() {
   const [applicants, setApplicants] = useState<JobApplicant[] | null>(null)
   const [interviews, setInterviews] = useState<InterviewRound[] | null>(null)
   const [showAddApplicant, setShowAddApplicant] = useState(false)
+  const [scheduleFor, setScheduleFor] = useState<JobApplicant | null>(null)
 
   const loadingApplicants = activeTab === 'applicants' && applicants === null
   const loadingInterviews = activeTab === 'interviews' && interviews === null
@@ -445,6 +619,32 @@ export function JobOpeningDetail() {
       return () => { cancelled = true }
     }
   }, [activeTab, interviews, id])
+
+  const [refreshingApplicants, setRefreshingApplicants] = useState(false)
+  const [updatingApplicant, setUpdatingApplicant] = useState<string | null>(null)
+
+  function refreshApplicants() {
+    if (!id || refreshingApplicants) return
+    setRefreshingApplicants(true)
+    getJobApplicants(id)
+      .then((data) => setApplicants(data))
+      .catch(() => {})
+      .finally(() => setRefreshingApplicants(false))
+  }
+
+  async function handleApplicantStatus(applicantId: string, status: string) {
+    setUpdatingApplicant(applicantId)
+    try {
+      await updateJobApplicantStatus(applicantId, status)
+      setApplicants((prev) =>
+        prev ? prev.map((a) => (a.id === applicantId ? { ...a, status } : a)) : prev,
+      )
+    } catch {
+      // silently fail
+    } finally {
+      setUpdatingApplicant(null)
+    }
+  }
 
   function goBack() {
     navigate('/hrm/recruitment')
@@ -503,7 +703,7 @@ export function JobOpeningDetail() {
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto pt-6">
+      <div className="flex-1 overflow-y-auto pt-6 relative">
         <div className="max-w-4xl">
           {activeTab === 'overview' && (
             <div className="space-y-5">
@@ -572,7 +772,16 @@ export function JobOpeningDetail() {
           {activeTab === 'applicants' && (
             <div>
               {/* Add Applicant button */}
-              <div className="flex justify-end mb-4">
+              <div className="flex justify-end mb-4 gap-2">
+                <button
+                  type="button"
+                  onClick={refreshApplicants}
+                  disabled={refreshingApplicants}
+                  className="btn-secondary flex items-center gap-2"
+                  title="Refresh applicants"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshingApplicants ? 'animate-spin' : ''}`} />
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowAddApplicant(true)}
@@ -595,64 +804,99 @@ export function JobOpeningDetail() {
                 </div>
               )}
               {!loadingApplicants && applicants !== null && applicants.length > 0 && (
-                <div className="space-y-3">
+                <div>
                   <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-3">
                     {applicants.length} applicant{applicants.length === 1 ? '' : 's'}
                   </p>
-                  {applicants.map((a) => (
-                    <div key={a.id} className="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-sm transition-shadow">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold flex-shrink-0">
-                            {a.applicantName.charAt(0).toUpperCase()}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {applicants.map((a) => {
+                      const isUpdating = updatingApplicant === a.id
+                      return (
+                        <div key={a.id} className="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-sm transition-shadow flex flex-col">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                                {a.applicantName.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm text-gray-900 truncate">{a.applicantName}</p>
+                                {a.emailAddress && (
+                                  <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5 truncate">
+                                    <Mail className="w-3 h-3 flex-shrink-0" />
+                                    {a.emailAddress}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <Badge variant={APPLICANT_STATUS_VARIANT[a.status] ?? 'gray'}>
+                              {a.status || 'Open'}
+                            </Badge>
                           </div>
-                          <div>
-                            <p className="font-semibold text-sm text-gray-900">{a.applicantName}</p>
-                            {a.emailAddress && (
-                              <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                                <Mail className="w-3 h-3" />
-                                {a.emailAddress}
-                              </p>
+                          <div className="flex items-center gap-3 mt-3 text-xs text-gray-400">
+                            {a.source && (
+                              <span className="flex items-center gap-1">
+                                <ExternalLink className="w-3 h-3" />
+                                {a.source}
+                              </span>
+                            )}
+                            {a.createdOn && (
+                              <span>Applied {formatDate(a.createdOn)}</span>
+                            )}
+                            {a.resumeLink && (
+                              <a
+                                href={a.resumeLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-500 hover:text-blue-600 flex items-center gap-1"
+                              >
+                                <FileText className="w-3 h-3" />
+                                Resume
+                              </a>
+                            )}
+                          </div>
+                          {a.notes && (
+                            <p className="mt-2 text-xs text-gray-500 line-clamp-2">{a.notes}</p>
+                          )}
+                          {/* Accept / Reject / Schedule buttons */}
+                          <div className="mt-3 pt-3 border-t border-gray-50 overflow-hidden">
+                            {a.status === 'Accepted' ? (
+                              <div className="btn-enter-right">
+                                <button
+                                  type="button"
+                                  onClick={() => setScheduleFor(a)}
+                                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-purple-50 text-purple-600 hover:bg-purple-100"
+                                >
+                                  <CalendarDays className="w-3.5 h-3.5" />
+                                  Schedule Interview
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  disabled={isUpdating}
+                                  onClick={() => { void handleApplicantStatus(a.id, 'Accepted') }}
+                                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-green-50 text-green-600 hover:bg-green-100"
+                                >
+                                  {isUpdating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                  Accept
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isUpdating || a.status === 'Rejected'}
+                                  onClick={() => { void handleApplicantStatus(a.id, 'Rejected') }}
+                                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-red-50 text-red-600 hover:bg-red-100"
+                                >
+                                  {isUpdating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                                  Reject
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>
-                        <Badge variant={APPLICANT_STATUS_VARIANT[a.status] ?? 'gray'}>
-                          {a.status || 'Open'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-3 mt-3 text-xs text-gray-400">
-                        {a.source && (
-                          <span className="flex items-center gap-1">
-                            <ExternalLink className="w-3 h-3" />
-                            {a.source}
-                          </span>
-                        )}
-                        {a.rating > 0 && (
-                          <span className="flex items-center gap-1">
-                            <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                            {a.rating}/5
-                          </span>
-                        )}
-                        {a.createdOn && (
-                          <span>Applied {formatDate(a.createdOn)}</span>
-                        )}
-                        {a.resumeLink && (
-                          <a
-                            href={a.resumeLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-500 hover:text-blue-600 flex items-center gap-1"
-                          >
-                            <FileText className="w-3 h-3" />
-                            Resume
-                          </a>
-                        )}
-                      </div>
-                      {a.notes && (
-                        <p className="mt-2 text-xs text-gray-500 line-clamp-2">{a.notes}</p>
-                      )}
-                    </div>
-                  ))}
+                      )
+                    })}
+                  </div>
                 </div>
               )}
             </div>
@@ -728,14 +972,29 @@ export function JobOpeningDetail() {
         </div>
       </div>
 
+      {/* Schedule Interview Panel — full overlay like staff detail */}
+      {scheduleFor && job && (
+        <ScheduleInterviewPanel
+          applicant={scheduleFor}
+          jobOpeningId={job.id}
+          onClose={() => setScheduleFor(null)}
+          onScheduled={() => {
+            setScheduleFor(null)
+            setInterviews(null)
+            setActiveTab('interviews')
+          }}
+        />
+      )}
+
       {showAddApplicant && job && (
         <AddApplicantDialog
           jobOpeningId={job.id}
           jobTitle={job.jobTitle}
           onClose={() => setShowAddApplicant(false)}
           onSaved={(applicant) => {
-            setApplicants((prev) => (prev ? [applicant, ...prev] : [applicant]))
+            setApplicants((prev) => prev ? [applicant, ...prev] : [applicant])
             setShowAddApplicant(false)
+            refreshApplicants()
           }}
         />
       )}

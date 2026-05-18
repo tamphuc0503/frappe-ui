@@ -130,6 +130,18 @@ p {
 }
 .page-slide-enter { animation: page-slide-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* Button swap animation */
+@keyframes btn-exit-left {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(-100%); }
+}
+@keyframes btn-enter-right {
+  from { opacity: 0; transform: translateX(100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.btn-exit-left { animation: btn-exit-left 0.25s cubic-bezier(0.4, 0, 1, 1) both; }
+.btn-enter-right { animation: btn-enter-right 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 /* Hide scrollbar visuals while keeping scroll behavior. */
 .scrollbar-hide {
   scrollbar-width: none;

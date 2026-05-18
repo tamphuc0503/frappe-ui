@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useFetchOnce } from '../../hooks/useFetchOnce'
 import { RefreshCw } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -44,6 +45,7 @@ function yearBounds(year: number): { from: string; to: string } {
 
 export function Payslips() {
   const pageLoading = usePageLoad()
+  const navigate = useNavigate()
   const currentYear = new Date().getFullYear()
 
   const [rangeKey, setRangeKey] = useState<RangeKey>('this-year')
@@ -168,7 +170,7 @@ export function Payslips() {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {payslips.map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-50/60 transition-colors">
+                    <tr key={p.id} className="hover:bg-gray-50/60 transition-colors cursor-pointer" onClick={() => navigate(`/my-space/payslips/${encodeURIComponent(p.id)}`)}>
                       <td className="table-td">
                         <div className="font-medium text-gray-900">{formatPeriod(p.startDate, p.endDate)}</div>
                         <div className="text-xs text-gray-400 truncate max-w-[260px]">{p.id}</div>

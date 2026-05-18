@@ -19,16 +19,20 @@ import { Employee } from './pages/hrm/Employee'
 import { EmployeeDetail } from './pages/hrm/EmployeeDetail'
 import { Leave } from './pages/hrm/Leave'
 import { Payrolls } from './pages/hrm/Payrolls'
+import { PayrollDetail } from './pages/hrm/PayrollDetail'
 import { Recruitment } from './pages/hrm/Recruitment'
 import { JobOpeningDetail } from './pages/hrm/JobOpeningDetail'
 import { Staffings } from './pages/hrm/Staffings'
+import { Interviews as HrmInterviews } from './pages/hrm/Interviews'
 import { ShiftAttendance } from './pages/hrm/ShiftAttendance'
 import { ClockInOut } from './pages/hrm/ClockInOut'
 
 import { MyTasks } from './pages/myspace/MyTasks'
 import { MyAssets } from './pages/myspace/MyAssets'
 import { MyLeaves } from './pages/myspace/MyLeaves'
+import { MyInterviews } from './pages/myspace/MyInterviews'
 import { Payslips as MyPayslips } from './pages/myspace/Payslips'
+import { MyPayslipDetail } from './pages/myspace/MyPayslipDetail'
 import { Profile } from './pages/myspace/Profile'
 import { RequestNewMember } from './pages/myspace/RequestNewMember'
 
@@ -77,16 +81,20 @@ const router = createBrowserRouter(
         <Route path="/hrm/employees/:id" element={<EmployeeDetail />} />
         <Route path="/hrm/leave" element={<Leave />} />
         <Route path="/hrm/payrolls" element={<Payrolls />} />
+        <Route path="/hrm/payrolls/:id" element={<PayrollDetail />} />
         <Route path="/hrm/recruitment" element={<Recruitment />} />
         <Route path="/hrm/recruitment/:id" element={<JobOpeningDetail />} />
         <Route path="/hrm/staffings" element={<Staffings />} />
+        <Route path="/hrm/interviews" element={<HrmInterviews />} />
         <Route path="/hrm/attendance" element={<ShiftAttendance />} />
         <Route path="/hrm/clock-in-out" element={<ClockInOut />} />
 
         <Route path="/my-space/tasks" element={<MyTasks />} />
         <Route path="/my-space/assets" element={<MyAssets />} />
         <Route path="/my-space/leaves" element={<MyLeaves />} />
+        <Route path="/my-space/interviews" element={<MyInterviews />} />
         <Route path="/my-space/payslips" element={<MyPayslips />} />
+        <Route path="/my-space/payslips/:id" element={<MyPayslipDetail />} />
         <Route path="/my-space/profile" element={<Profile />} />
         <Route path="/my-space/request-new-member" element={<RequestNewMember />} />
 

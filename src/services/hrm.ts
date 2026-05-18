@@ -642,7 +642,7 @@ export async function getJobApplicants(jobOpeningId: string): Promise<JobApplica
     doctype: 'Job Applicant',
     fields: JSON.stringify([
       'name', 'applicant_name', 'email_id', 'job_title', 'status',
-      'rating', 'notes', 'resume_link', 'source', 'creation',
+      'notes', 'resume_link', 'source', 'creation',
     ]),
     filters: JSON.stringify([['job_title', '=', jobOpeningId]]),
     limit_page_length: '0',
@@ -659,7 +659,7 @@ export async function getJobApplicants(jobOpeningId: string): Promise<JobApplica
     emailAddress: r.email_id || '',
     jobTitle: r.job_title || '',
     status: r.status || '',
-    rating: r.rating ?? 0,
+    rating: 0,
     notes: r.notes || '',
     resumeLink: r.resume_link || '',
     source: r.source || '',
@@ -719,6 +719,76 @@ export async function createJobApplicant(input: CreateJobApplicantInput): Promis
   }
 }
 
+export async function updateJobApplicantStatus(applicantId: string, status: string): Promise<void> {
+  const res = await http(`${FRAPPE_BASE}/api/resource/Job Applicant/${encodeURIComponent(applicantId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ status }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as Record<string, unknown>
+    throw new Error((data.exc as string) ?? 'Failed to update applicant status.')
+  }
+}
+
+// ── Interview Rounds ─────────────────────────────────────────────────────────
+
+export async function createInterview(input: {
+  jobApplicant: string
+  jobOpening: string
+  interviewRound: string
+  scheduledDate: string
+  fromTime: string
+  toTime: string
+}): Promise<InterviewRound> {
+  const doc = {
+    doctype: 'Interview',
+    job_applicant: input.jobApplicant,
+    job_opening: input.jobOpening,
+    interview_round: input.interviewRound,
+    scheduled_date: input.scheduledDate,
+    from_time: input.fromTime,
+    to_time: input.toTime,
+  }
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.insert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ doc }),
+  })
+  const data = (await res.json()) as InsertResponse<FrappeInterview>
+  if (!res.ok || !data.message) {
+    throw new Error(parseServerMessage(data._server_messages) ?? data.exc ?? 'Failed to schedule interview.')
+  }
+  const r = data.message
+  return {
+    id: r.name,
+    jobApplicant: r.job_applicant || '',
+    applicantName: '',
+    jobOpening: r.job_opening || '',
+    interviewRound: r.interview_round || '',
+    scheduledDate: r.scheduled_date || '',
+    fromTime: r.from_time || '',
+    toTime: r.to_time || '',
+    status: r.status || '',
+    rating: r.rating ?? 0,
+    totalScore: r.total_score ?? 0,
+    averageRating: r.average_rating ?? 0,
+    result: r.result || '',
+  }
+}
+
+export async function getInterviewRounds(): Promise<{ value: string; label: string }[]> {
+  const params = new URLSearchParams({
+    doctype: 'Interview Round',
+    fields: JSON.stringify(['name']),
+    limit_page_length: '0',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<{ name: string }>
+  if (!res.ok || data.exc) return []
+  return (data.message ?? []).map((r) => ({ value: r.name, label: r.name }))
+}
+
 export async function getInterviews(jobOpeningId: string): Promise<InterviewRound[]> {
   const params = new URLSearchParams({
     doctype: 'Interview',
@@ -728,6 +798,39 @@ export async function getInterviews(jobOpeningId: string): Promise<InterviewRoun
       'rating', 'total_score', 'average_rating', 'result',
     ]),
     filters: JSON.stringify([['job_opening', '=', jobOpeningId]]),
+    limit_page_length: '0',
+    order_by: 'scheduled_date desc',
+  })
+  const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.get_list?${params}`)
+  const data = (await res.json()) as GetListResponse<FrappeInterview>
+  if (!res.ok || data.exc) {
+    throw new Error(data.exc ?? 'Failed to fetch interviews.')
+  }
+  return (data.message ?? []).map((r) => ({
+    id: r.name,
+    jobApplicant: r.job_applicant || '',
+    applicantName: '',
+    jobOpening: r.job_opening || '',
+    interviewRound: r.interview_round || '',
+    scheduledDate: r.scheduled_date || '',
+    fromTime: r.from_time || '',
+    toTime: r.to_time || '',
+    status: r.status || '',
+    rating: r.rating ?? 0,
+    totalScore: r.total_score ?? 0,
+    averageRating: r.average_rating ?? 0,
+    result: r.result || '',
+  }))
+}
+
+export async function getMyInterviews(): Promise<InterviewRound[]> {
+  const params = new URLSearchParams({
+    doctype: 'Interview',
+    fields: JSON.stringify([
+      'name', 'job_applicant', 'job_opening', 'interview_round',
+      'scheduled_date', 'from_time', 'to_time', 'status',
+      'rating', 'total_score', 'average_rating', 'result',
+    ]),
     limit_page_length: '0',
     order_by: 'scheduled_date desc',
   })
