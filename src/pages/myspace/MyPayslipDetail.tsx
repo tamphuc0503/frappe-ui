@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Calendar, Building2, Briefcase, User, ChevronRight } from 'lucide-react'
+import { Calendar, Building2, Briefcase, User, ChevronRight, FileText } from 'lucide-react'
 import { Badge } from '../../components/ui/Badge'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { useFetchOnce } from '../../hooks/useFetchOnce'
@@ -89,7 +89,18 @@ export function MyPayslipDetail() {
           </h1>
           <p className="text-sm text-gray-500">{detail.id}</p>
         </div>
-        {statusBadge(detail.status)}
+        <div className="flex items-center gap-3">
+          <a
+            href={`/api/method/frappe.utils.print_format.download_pdf?doctype=Salary Slip&name=${encodeURIComponent(detail.id)}&format=Standard`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary flex items-center gap-2"
+          >
+            <FileText className="w-4 h-4" />
+            Preview PDF
+          </a>
+          {statusBadge(detail.status)}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
