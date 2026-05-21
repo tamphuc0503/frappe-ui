@@ -741,14 +741,18 @@ export async function createInterview(input: {
   fromTime: string
   toTime: string
 }): Promise<InterviewRound> {
+  function toFrappeTime(t: string) {
+    return t.length === 5 ? `${t}:00` : t
+  }
   const doc = {
     doctype: 'Interview',
     job_applicant: input.jobApplicant,
     job_opening: input.jobOpening,
     interview_round: input.interviewRound,
     scheduled_date: input.scheduledDate,
-    from_time: input.fromTime,
-    to_time: input.toTime,
+    from_time: toFrappeTime(input.fromTime),
+    to_time: toFrappeTime(input.toTime),
+    status: 'Pending',
   }
   const res = await http(`${FRAPPE_BASE}/api/method/frappe.client.insert`, {
     method: 'POST',

@@ -14,6 +14,7 @@ import {
   ListChecks,
   FolderOpen,
   Receipt,
+  Timer,
   LogIn,
   Truck,
   Car,
@@ -69,6 +70,7 @@ const navItems: NavItem[] = [
       { label: 'My Leaves', icon: <CalendarOff className="w-4 h-4" />, path: '/my-space/leaves' },
       { label: 'My Interviews', icon: <Briefcase className="w-4 h-4" />, path: '/my-space/interviews' },
       { label: 'My Payslips', icon: <Receipt className="w-4 h-4" />, path: '/my-space/payslips' },
+      { label: 'My Timesheets', icon: <Timer className="w-4 h-4" />, path: '/my-space/timesheets' },
     ],
   },
   {

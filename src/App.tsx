@@ -33,6 +33,7 @@ import { MyLeaves } from './pages/myspace/MyLeaves'
 import { MyInterviews } from './pages/myspace/MyInterviews'
 import { Payslips as MyPayslips } from './pages/myspace/Payslips'
 import { MyPayslipDetail } from './pages/myspace/MyPayslipDetail'
+import { MyTimesheets } from './pages/myspace/MyTimesheets'
 import { Profile } from './pages/myspace/Profile'
 import { RequestNewMember } from './pages/myspace/RequestNewMember'
 
@@ -95,6 +96,7 @@ const router = createBrowserRouter(
         <Route path="/my-space/interviews" element={<MyInterviews />} />
         <Route path="/my-space/payslips" element={<MyPayslips />} />
         <Route path="/my-space/payslips/:id" element={<MyPayslipDetail />} />
+        <Route path="/my-space/timesheets" element={<MyTimesheets />} />
         <Route path="/my-space/profile" element={<Profile />} />
         <Route path="/my-space/request-new-member" element={<RequestNewMember />} />
 

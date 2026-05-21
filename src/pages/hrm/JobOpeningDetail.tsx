@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Briefcase, Building2, MapPin, Users, ClipboardList, Info, Mail, Star, Calendar, Clock, ExternalLink, UserCheck, FileText, Loader2, Plus, X, Phone, Link, DollarSign, RefreshCw, Check, XCircle, CalendarDays } from 'lucide-react'
+import { Briefcase, Building2, MapPin, Users, ClipboardList, Info, Mail, Star, Calendar, Clock, ExternalLink, UserCheck, FileText, Loader2, Plus, X, Phone, Link, DollarSign, RefreshCw, Check, XCircle, CalendarDays } from 'lucide-react'
 import { Badge } from '../../components/ui/Badge'
+import { Breadcrumb } from '../../components/ui/Breadcrumb'
 import { Combobox } from '../../components/ui/Combobox'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { useFetchOnce } from '../../hooks/useFetchOnce'
@@ -665,15 +666,13 @@ export function JobOpeningDetail() {
 
   return (
     <div className="flex flex-col h-full page-slide-enter">
-      {/* Header */}
-      <div className="flex items-center gap-3 pb-4 border-b border-gray-100 mb-0 flex-shrink-0">
-        <button
-          type="button"
-          onClick={goBack}
-          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
+      <Breadcrumb items={[
+        { label: 'Recruitment', to: '/hrm/recruitment' },
+        { label: job.id },
+      ]} />
+
+      {/* Title row */}
+      <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-0 flex-shrink-0">
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-bold text-gray-900 truncate">{job.jobTitle}</h1>
           {job.designation && (

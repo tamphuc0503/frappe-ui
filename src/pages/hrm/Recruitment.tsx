@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, Briefcase, Building2, MapPin, RefreshCw, X, Loader2 } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Badge } from '../../components/ui/Badge'
+import { Breadcrumb } from '../../components/ui/Breadcrumb'
 import { usePageLoad } from '../../hooks/usePageLoad'
 import { useFetchOnce } from '../../hooks/useFetchOnce'
 import { Sk, SkPageHeader, SkKanbanColumn } from '../../components/ui/Skeleton'
@@ -110,6 +111,7 @@ function AddJobOpeningDialog({ onClose, onSaved }: AddJobDialogProps) {
   const [errorShaking, setErrorShaking] = useState(false)
   const [departments, setDepartments] = useState<LookupOption[]>([])
   const [designations, setDesignations] = useState<LookupOption[]>([])
+  const [closing, setClosing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -120,11 +122,16 @@ function AddJobOpeningDialog({ onClose, onSaved }: AddJobDialogProps) {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !submitting) onClose()
+      if (e.key === 'Escape' && !submitting) setClosing(true)
     }
     globalThis.addEventListener('keydown', onKey)
     return () => globalThis.removeEventListener('keydown', onKey)
-  }, [onClose, submitting])
+  }, [submitting])
+
+  function handleClose() {
+    if (submitting) return
+    setClosing(true)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -155,13 +162,14 @@ function AddJobOpeningDialog({ onClose, onSaved }: AddJobDialogProps) {
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 backdrop-enter"
-        onClick={submitting ? undefined : onClose}
+        className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-50 ${closing ? 'backdrop-exit' : 'backdrop-enter'}`}
+        onClick={submitting ? undefined : handleClose}
       />
       <div className="fixed inset-x-0 top-0 z-50 flex justify-center pointer-events-none">
         <div
-          className="bg-white rounded-b-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto pointer-events-auto dialog-enter"
+          className={`bg-white rounded-b-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto pointer-events-auto ${closing ? 'dialog-exit' : 'dialog-enter'}`}
           onClick={(e) => e.stopPropagation()}
+          onAnimationEnd={() => { if (closing) onClose() }}
         >
           <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
             <div>
@@ -169,7 +177,7 @@ function AddJobOpeningDialog({ onClose, onSaved }: AddJobDialogProps) {
               <p className="text-sm text-gray-500 mt-0.5">Create a new job opening for recruitment.</p>
             </div>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               aria-label="Close"
             >
@@ -260,7 +268,7 @@ function AddJobOpeningDialog({ onClose, onSaved }: AddJobDialogProps) {
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 disabled={submitting}
                 className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -363,6 +371,7 @@ export function Recruitment() {
 
   return (
     <div>
+      <Breadcrumb items={[{ label: 'Recruitment' }]} />
       <PageHeader
         title="Recruitment"
         subtitle={`${jobs.length} job opening${jobs.length === 1 ? '' : 's'}`}

@@ -55,6 +55,21 @@ p {
   animation: field-shake 0.4s ease-in-out;
 }
 
+@keyframes cal-day-wiggle {
+  0%   { transform: scale(1);    }
+  20%  { transform: scale(1.15) rotate(-4deg); }
+  40%  { transform: scale(1.15) rotate(4deg);  }
+  60%  { transform: scale(1.15) rotate(-3deg); }
+  80%  { transform: scale(1.15) rotate(2deg);  }
+  100% { transform: scale(1.15) rotate(0deg);  }
+}
+
+.cal-day:hover {
+  animation: cal-day-wiggle 0.45s ease-in-out forwards;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
 /* Dialog entrance animation */
 @keyframes dialog-slide-down {
   from {
@@ -78,6 +93,30 @@ p {
 
 .backdrop-enter {
   animation: backdrop-fade-in 0.25s ease-out both;
+}
+
+@keyframes dialog-slide-up {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes backdrop-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+.dialog-exit {
+  animation: dialog-slide-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.backdrop-exit {
+  animation: backdrop-fade-out 0.3s ease-in both;
 }
 
 @keyframes fadeIn {

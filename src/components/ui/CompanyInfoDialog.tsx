@@ -12,22 +12,28 @@ interface CompanyInfoDialogProps {
 
 export function CompanyInfoDialog({ onClose }: CompanyInfoDialogProps) {
   const [company] = useState<Company | null>(() => getCompanyCache())
+  const [closing, setClosing] = useState(false)
+
+  function handleClose() {
+    setClosing(true)
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') setClosing(true)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [])
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 backdrop-enter" onClick={onClose} />
+      <div className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-50 ${closing ? 'backdrop-exit' : 'backdrop-enter'}`} onClick={handleClose} />
       <div className="fixed inset-x-0 top-0 z-50 flex justify-center pointer-events-none">
         <div
-          className="bg-white rounded-b-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto pointer-events-auto dialog-enter"
+          className={`bg-white rounded-b-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto pointer-events-auto ${closing ? 'dialog-exit' : 'dialog-enter'}`}
           onClick={(e) => e.stopPropagation()}
+          onAnimationEnd={() => { if (closing) onClose() }}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
@@ -41,7 +47,7 @@ export function CompanyInfoDialog({ onClose }: CompanyInfoDialogProps) {
               </div>
             </div>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               aria-label="Close"
             >
@@ -78,7 +84,7 @@ export function CompanyInfoDialog({ onClose }: CompanyInfoDialogProps) {
 
           {/* Footer */}
           <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl">
-            <button onClick={onClose} className="btn-secondary">
+            <button onClick={handleClose} className="btn-secondary">
               Close
             </button>
           </div>

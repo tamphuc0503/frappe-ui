@@ -28,7 +28,7 @@ export function ToastProvider({ children }: Readonly<{ children: ReactNode }>) {
   const addToast = useCallback((message: string, variant: ToastVariant = 'info') => {
     const id = nextId++
     setToasts((prev) => [...prev, { id, message, variant }])
-    setTimeout(() => removeToast(id), 4000)
+    setTimeout(() => removeToast(id), 3000)
   }, [removeToast])
 
   return (

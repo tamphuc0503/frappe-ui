@@ -39,7 +39,13 @@ function AddEmployeeDialog({ options, onClose, onSave }: AddEmployeeDialogProps)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [errorShaking, setErrorShaking] = useState(false)
   const [shakingFields, setShakingFields] = useState<Set<keyof FormData>>(new Set())
+  const [closing, setClosing] = useState(false)
   const firstInputRef = useRef<HTMLInputElement>(null)
+
+  function handleClose() {
+    if (submitting) return
+    setClosing(true)
+  }
 
   useEffect(() => {
     firstInputRef.current?.focus()
@@ -47,11 +53,11 @@ function AddEmployeeDialog({ options, onClose, onSave }: AddEmployeeDialogProps)
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !submitting) onClose()
+      if (e.key === 'Escape' && !submitting) setClosing(true)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, submitting])
+  }, [submitting])
 
   function set(field: keyof FormData, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -104,13 +110,14 @@ function AddEmployeeDialog({ options, onClose, onSave }: AddEmployeeDialogProps)
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 backdrop-enter"
-        onClick={submitting ? undefined : onClose}
+        className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-50 ${closing ? 'backdrop-exit' : 'backdrop-enter'}`}
+        onClick={handleClose}
       />
       <div className="fixed inset-x-0 top-0 z-50 flex justify-center pointer-events-none">
         <div
-          className="bg-white rounded-b-2xl shadow-2xl w-full max-w-lg max-h-[90svh] flex flex-col overflow-hidden pointer-events-auto dialog-enter"
+          className={`bg-white rounded-b-2xl shadow-2xl w-full max-w-lg max-h-[90svh] flex flex-col overflow-hidden pointer-events-auto ${closing ? 'dialog-exit' : 'dialog-enter'}`}
           onClick={(e) => e.stopPropagation()}
+          onAnimationEnd={() => { if (closing) onClose() }}
         >
           {/* Header — pinned */}
           <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 flex-shrink-0">
@@ -119,7 +126,7 @@ function AddEmployeeDialog({ options, onClose, onSave }: AddEmployeeDialogProps)
               <p className="text-sm text-gray-500 mt-0.5">Fill in the details to create an employee record.</p>
             </div>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <X className="w-5 h-5" />
@@ -153,7 +160,7 @@ function AddEmployeeDialog({ options, onClose, onSave }: AddEmployeeDialogProps)
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl flex-shrink-0">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 disabled={submitting}
                 className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
               >

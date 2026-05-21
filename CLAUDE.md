@@ -153,7 +153,9 @@ All keyframes live in `index.css`. Current animations:
 | `.skeleton` | Shimmer sweep (1.6s loop) | Skeleton loading |
 | `.field-shake` | Horizontal wobble (0.4s) | Failed form validation |
 | `.dialog-enter` | Slide from top + fade (0.45s spring) | Dialog/sheet open |
-| `.backdrop-enter` | Fade in (0.25s) | Dialog backdrop |
+| `.dialog-exit` | Slide to top + fade (0.3s) | Dialog/sheet close |
+| `.backdrop-enter` | Fade in (0.25s) | Dialog backdrop open |
+| `.backdrop-exit` | Fade out (0.3s) | Dialog backdrop close |
 
 - Add new keyframes in `index.css` alongside the existing ones.
 - Use `onAnimationEnd` to clean up one-shot animation classes (see `shakingFields` in `Employee.tsx`).
@@ -187,6 +189,31 @@ export function MyPage() {
 - **Required field errors trigger the `.field-shake` animation** — apply via `shakingFields: Set<keyof FormData>` state + `onAnimationEnd` cleanup (pattern established in `Employee.tsx`).
 - **Fake API calls use `setTimeout` wrapped in a `Promise`** until real endpoints exist. Show a `Loader2` spinner in the submit button; block Cancel, backdrop click, and Escape during submission.
 - **Sheet-from-top dialogs** use `fixed inset-x-0 top-0` container + `rounded-b-2xl` panel + `.dialog-enter` class. The backdrop uses `.backdrop-enter`.
+- **Every dialog must animate on close.** Add a `closing` boolean state. All dismiss paths (Escape key, backdrop click, Cancel button, X button) set `closing = true` instead of calling `onClose()` directly. Toggle classes on the panel and backdrop based on `closing`, and call `onClose()` via `onAnimationEnd` on the panel. Never call `onClose()` from dismiss triggers — only from `onAnimationEnd`. Do not block `onClose()` during submission success — call it directly there since no exit animation is needed.
+  ```tsx
+  const [closing, setClosing] = useState(false)
+
+  function handleClose() {
+    if (submitting) return
+    setClosing(true)
+  }
+
+  // Escape key useEffect — use setClosing(true) directly (not handleClose) to avoid stale closure in deps
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !submitting) setClosing(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [submitting])
+
+  // JSX
+  <div className={`fixed inset-0 ... ${closing ? 'backdrop-exit' : 'backdrop-enter'}`} onClick={handleClose} />
+  <div
+    className={`... ${closing ? 'dialog-exit' : 'dialog-enter'}`}
+    onAnimationEnd={() => { if (closing) onClose() }}
+  >
+  ```
 - **Submit error banners animate height** — every dialog/modal that surfaces a submit error must wrap the banner in `<div className={`overflow-hidden transition-all duration-300 ease-in-out ${error ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>` so the dialog grows/shrinks smoothly when the error appears or clears, matching `Login.tsx` / `ForgotPassword.tsx`. Pair with a separate `errorShaking` state and `.field-shake` on the inner banner; reset via `onAnimationEnd`.
 - Close on Escape via `window.addEventListener('keydown', ...)` in a `useEffect` — clean up on unmount.
 - **Clear errors before submit/save.** Every submit handler and save action must call `setSubmitError(null)` (and clear any field-level errors) as its first step, before validation or the API call. This ensures stale error banners from a previous attempt are hidden immediately when the user retries. Likewise, any change to form inputs (text, dropdown, date, toggle) should clear the submit error so the banner disappears as soon as the user corrects their input.
